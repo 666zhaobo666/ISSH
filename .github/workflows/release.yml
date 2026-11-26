@@ -99,10 +99,41 @@ jobs:
           npx tauri android init --ci
           npx tauri android build --apk --target aarch64
 
-      - name: Upload Android APK to GitHub Release
+      - name: Sign & Upload Android APK to GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          APK_PATH=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
-          cp "$APK_PATH" "ISSH_${GITHUB_REF_NAME}_android_arm64.apk"
-          gh release upload "${GITHUB_REF_NAME}" "ISSH_${GITHUB_REF_NAME}_android_arm64.apk" --clobber
+          set -euo pipefail
+          ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
+          APK_RAW=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
+
+          KS_PATH="/tmp/issh-release.keystore"
+          KS_PASS="${ANDROID_KEYSTORE_PASSWORD:-issh-android-sign-2026}"
+          KS_ALIAS="${ANDROID_KEY_ALIAS:-issh}"
+
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS_PATH"
+          else
+            keytool -genkeypair -v -storetype PKCS12 \
+              -keystore "$KS_PATH" -storepass "$KS_PASS" -keypass "$KS_PASS" \
+              -alias "$KS_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=ISSH, OU=Mobile, O=ISSH, L=Shanghai, S=Shanghai, C=CN"
+          fi
+
+          "$BUILD_TOOLS/zipalign" -p -f 4 "$APK_RAW" "/tmp/issh-aligned.apk"
+          OUT_APK="ISSH_${GITHUB_REF_NAME}_android_arm64.apk"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$KS_PATH" \
+            --ks-pass "pass:$KS_PASS" \
+            --ks-key-alias "$KS_ALIAS" \
+            --key-pass "pass:$KS_PASS" \
+            --out "$OUT_APK" \
+            "/tmp/issh-aligned.apk"
+          "$BUILD_TOOLS/apksigner" verify "$OUT_APK"
+
+          gh release upload "${GITHUB_REF_NAME}" "$OUT_APK" --clobber
