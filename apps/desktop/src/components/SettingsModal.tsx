@@ -8,6 +8,7 @@ import {
   Columns2,
   Download,
   Eye,
+  Info,
   Palette,
   Plus,
   RefreshCw,
@@ -40,13 +41,20 @@ import { TERMINAL_THEMES } from '../themes/terminalThemes';
 import { ProviderIcon } from './ProviderIcons';
 import { AccountSyncPanel, type SyncStatusState } from './AccountSyncPanel';
 import type { CloudUser } from '../cloud/cloudClient';
+import {
+  APP_VERSION,
+  checkAppUpdate,
+  type UpdateCheckResult,
+} from '../utils/appVersion';
+import { isTauriRuntime } from '../transport/runtime';
 
 export type SettingsTab =
   | 'providers'
   | 'skills'
   | 'permissions'
   | 'appearance'
-  | 'sync';
+  | 'sync'
+  | 'about';
 
 interface SettingsModalProps {
   open: boolean;
@@ -64,6 +72,8 @@ interface SettingsModalProps {
   onOpenAuth?: () => void;
   onCloudUserChange?: (user: CloudUser | null) => void;
   onManualSync?: () => void;
+  updateInfo?: UpdateCheckResult | null;
+  onUpdateChecked?: (info: UpdateCheckResult) => void;
   onClose: () => void;
 }
 
@@ -91,6 +101,8 @@ export function SettingsModal({
   onOpenAuth,
   onCloudUserChange,
   onManualSync,
+  updateInfo = null,
+  onUpdateChecked,
   onClose,
 }: SettingsModalProps) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
@@ -131,6 +143,13 @@ export function SettingsModal({
   // Sync / Export / Import state
   const [includeSecrets, setIncludeSecrets] = useState(true);
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateErr, setUpdateErr] = useState<string | null>(null);
+  const [upToDateNotice, setUpToDateNotice] = useState(false);
+  const [localUpdateInfo, setLocalUpdateInfo] = useState<UpdateCheckResult | null>(
+    updateInfo
+  );
+  const effectiveUpdateInfo = localUpdateInfo ?? updateInfo;
   const importFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -434,23 +453,30 @@ export function SettingsModal({
                 { id: 'permissions', label: '命令权限与安全', icon: ShieldCheck },
                 { id: 'appearance', label: '外观与终端', icon: Palette },
                 { id: 'sync', label: '账号与数据同步', icon: Cloud },
+                { id: 'about', label: '关于与更新', icon: Info },
               ] as const
             ).map((item) => {
               const Icon = item.icon;
               const active = tab === item.id;
+              const showDot = item.id === 'about' && Boolean(effectiveUpdateInfo?.hasUpdate);
               return (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setTab(item.id)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition ${
+                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left transition ${
                     active
                       ? 'bg-sky-500/20 font-medium text-sky-300'
                       : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                   }`}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
+                  <span className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </span>
+                  {showDot && (
+                    <span className="h-2 w-2 rounded-full bg-rose-500" title="发现新版本" />
+                  )}
                 </button>
               );
             })}
@@ -469,7 +495,9 @@ export function SettingsModal({
                     ? '命令危险等级与审批策略'
                     : tab === 'appearance'
                       ? '外观与终端偏好'
-                      : '账号体系与配置导入 / 导出'}
+                      : tab === 'sync'
+                        ? '账号与数据同步'
+                        : '关于 ISSH 与版本更新'}
             </h2>
             <button
               type="button"
@@ -1313,6 +1341,102 @@ export function SettingsModal({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* TAB 6: ABOUT & UPDATE CHECKER */}
+            {tab === 'about' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+                  <div className="flex items-center gap-4">
+                    <img
+                      src="./favicon.png"
+                      alt="ISSH"
+                      className="h-14 w-14 rounded-2xl border border-white/15 bg-[#090d14] p-1 shadow-lg"
+                    />
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-bold text-white">ISSH</span>
+                        <span className="rounded-full border border-sky-500/35 bg-sky-500/15 px-2.5 py-0.5 font-mono text-[11px] font-medium text-sky-300">
+                          v{APP_VERSION}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-400">
+                          {isTauriRuntime() ? 'Desktop 客户端' : 'Web 客户端'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        现代高颜值、多端云同步、内置 AI Agent 的跨平台 SSH 工作台
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={checkingUpdate}
+                    onClick={async () => {
+                      setCheckingUpdate(true);
+                      setUpdateErr(null);
+                      setUpToDateNotice(false);
+                      try {
+                        const res = await checkAppUpdate(true);
+                        setLocalUpdateInfo(res);
+                        onUpdateChecked?.(res);
+                        if (!res.hasUpdate) {
+                          setUpToDateNotice(true);
+                        }
+                      } catch (e) {
+                        setUpdateErr(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setCheckingUpdate(false);
+                      }
+                    }}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-2 font-medium text-white transition hover:bg-sky-400 disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${checkingUpdate ? 'animate-spin' : ''}`}
+                    />
+                    {checkingUpdate ? '检查中...' : '检查更新'}
+                  </button>
+                </div>
+
+                {updateErr && (
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-300">
+                    {updateErr}
+                  </div>
+                )}
+
+                {upToDateNotice && !effectiveUpdateInfo?.hasUpdate && (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-300">
+                    <Check className="h-4 w-4" />
+                    <span>当前已是最新版本 (v{APP_VERSION})</span>
+                  </div>
+                )}
+
+                {effectiveUpdateInfo?.hasUpdate && (
+                  <div className="space-y-2.5 rounded-xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4">
+                    <div className="font-semibold text-white">
+                      发现新版本 {effectiveUpdateInfo.tagName}
+                    </div>
+
+                    {effectiveUpdateInfo.notes && (
+                      <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-[#090d14] p-3 font-sans text-[11px] leading-relaxed text-slate-300">
+                        {effectiveUpdateInfo.notes}
+                      </pre>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <a
+                        href={effectiveUpdateInfo.htmlUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 font-medium text-white hover:bg-emerald-400"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        下载最新版 ({effectiveUpdateInfo.tagName})
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

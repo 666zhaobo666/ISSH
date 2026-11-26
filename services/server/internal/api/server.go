@@ -144,6 +144,7 @@ func (s *Server) Handler() http.Handler {
 			"registrationEnabled": regEnabled != "false",
 		})
 	})
+	mux.HandleFunc("GET /api/app/latest", s.handleGetLatestRelease)
 	mux.HandleFunc("POST /api/auth/send-code", s.handleSendCode)
 	mux.HandleFunc("POST /api/auth/register", s.handleRegister)
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)

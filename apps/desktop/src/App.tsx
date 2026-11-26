@@ -73,6 +73,10 @@ import {
   type LocalAiThread,
 } from './cloud/syncEngine';
 import {
+  checkAppUpdate,
+  type UpdateCheckResult,
+} from './utils/appVersion';
+import {
   loadAiSettings,
   saveAiSettings,
   type AiSettingsState,
@@ -132,6 +136,7 @@ export function App() {
   const [cloudUser, setCloudUser] = useState<CloudUser | null>(getCachedCloudUser);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatusState>('idle');
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number>(() => getSyncMeta().lastSyncedAt);
   const [conflictState, setConflictState] = useState<{
     localProfile: IsshUserProfileBundle;
@@ -333,6 +338,13 @@ export function App() {
       setResolvingConflict(false);
     }
   };
+
+  // Silent startup update check (server-cached GitHub Releases -> fallback direct GitHub)
+  useEffect(() => {
+    void checkAppUpdate(false)
+      .then((res) => setUpdateInfo(res))
+      .catch(() => {});
+  }, []);
 
   // Refresh user profile on startup if logged in
   useEffect(() => {
@@ -869,11 +881,18 @@ export function App() {
           </button>
           <button
             type="button"
-            onClick={() => openSettings('providers')}
-            className="rounded-md border border-white/10 bg-white/5 p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white"
-            title="软件设置 (AI 模型 / Skills / 权限 / 外观 / 账号)"
+            onClick={() => openSettings(updateInfo?.hasUpdate ? 'about' : 'providers')}
+            className="relative rounded-md border border-white/10 bg-white/5 p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+            title={
+              updateInfo?.hasUpdate
+                ? `发现新版本 ${updateInfo.tagName}（点击查看）`
+                : '软件设置 (AI 模型 / Skills / 权限 / 外观 / 账号 / 关于)'
+            }
           >
             <Settings className="h-3.5 w-3.5" />
+            {updateInfo?.hasUpdate && (
+              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-[#101622]" />
+            )}
           </button>
 
           {/* Compact User Avatar + VIP Badge + Sync Indicator Pill */}
@@ -1136,6 +1155,8 @@ export function App() {
           }
         }}
         onManualSync={() => void runSyncCycle(true)}
+        updateInfo={updateInfo}
+        onUpdateChecked={setUpdateInfo}
         onClose={() => setSettingsOpen(false)}
       />
 

@@ -470,6 +470,10 @@ func (g *Gateway) dispatch(
 		target := p.Path
 		if target == "" || target == "~" {
 			target = "."
+		} else if len(target) > 2 && target[:2] == "~/" {
+			if home, err := sc.RealPath("."); err == nil {
+				target = path.Join(home, target[2:])
+			}
 		}
 		real, err := sc.RealPath(target)
 		return map[string]string{"path": real}, err

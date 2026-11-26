@@ -310,10 +310,22 @@ export function FileManagerPane({
 
       setLoading(true);
       try {
-        const resolved =
-          normalizedTarget.startsWith('/') && !normalizedTarget.includes('~')
-            ? normalizedTarget
-            : await transport.sftpRealpath(sessionId, normalizedTarget);
+        let effectiveTarget = normalizedTarget;
+        if (effectiveTarget === '~' || effectiveTarget.startsWith('~/')) {
+          let home = homeDirRef.current;
+          if (!home) {
+            home = await transport.sftpRealpath(sessionId, '~');
+            homeDirRef.current = home;
+          }
+          effectiveTarget =
+            effectiveTarget === '~'
+              ? home
+              : `${home.replace(/\/+$/, '')}/${effectiveTarget.slice(2)}`;
+        }
+
+        const resolved = effectiveTarget.startsWith('/')
+          ? effectiveTarget
+          : await transport.sftpRealpath(sessionId, effectiveTarget);
 
         if (seq !== loadSeqRef.current) return;
 
