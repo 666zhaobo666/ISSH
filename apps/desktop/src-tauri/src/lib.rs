@@ -7,8 +7,15 @@ use tauri::Manager;
 
 #[tauri::command]
 fn read_clipboard_text() -> Result<String, String> {
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.get_text().map_err(|e| e.to_string())
+    #[cfg(not(mobile))]
+    {
+        let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+        return cb.get_text().map_err(|e| e.to_string());
+    }
+    #[cfg(mobile)]
+    {
+        Err("mobile uses browser clipboard".to_string())
+    }
 }
 
 #[tauri::command]
@@ -22,72 +29,92 @@ fn read_local_text_file(path: String) -> Result<String, String> {
 
 #[tauri::command]
 async fn open_ai_window(app: tauri::AppHandle, dark: Option<bool>) -> Result<(), String> {
-    if let Some(existing) = app.get_webview_window("ai-workbench") {
-        let _ = existing.unminimize();
-        let _ = existing.show();
-        let _ = existing.set_focus();
+    #[cfg(mobile)]
+    {
+        let _ = (app, dark);
         return Ok(());
     }
+    #[cfg(not(mobile))]
+    {
+        if let Some(existing) = app.get_webview_window("ai-workbench") {
+            let _ = existing.unminimize();
+            let _ = existing.show();
+            let _ = existing.set_focus();
+            return Ok(());
+        }
 
-    let is_dark = dark.unwrap_or(true);
-    let bg = if is_dark {
-        tauri::window::Color(12, 16, 24, 255)
-    } else {
-        tauri::window::Color(248, 250, 252, 255)
-    };
-    let theme = if is_dark {
-        tauri::Theme::Dark
-    } else {
-        tauri::Theme::Light
-    };
+        let is_dark = dark.unwrap_or(true);
+        let bg = if is_dark {
+            tauri::window::Color(12, 16, 24, 255)
+        } else {
+            tauri::window::Color(248, 250, 252, 255)
+        };
+        let theme = if is_dark {
+            tauri::Theme::Dark
+        } else {
+            tauri::Theme::Light
+        };
 
-    let _window = tauri::WebviewWindowBuilder::new(
-        &app,
-        "ai-workbench",
-        tauri::WebviewUrl::App("index.html?window=ai".into()),
-    )
-    .title("ISSH — AI 工作台")
-    .inner_size(520.0, 760.0)
-    .min_inner_size(360.0, 480.0)
-    .center()
-    .resizable(true)
-    .decorations(true)
-    .visible(false)
-    .theme(Some(theme))
-    .background_color(bg)
-    .build()
-    .map_err(|e| format!("创建 AI 独立窗口失败: {e}"))?;
+        let _window = tauri::WebviewWindowBuilder::new(
+            &app,
+            "ai-workbench",
+            tauri::WebviewUrl::App("index.html?window=ai".into()),
+        )
+        .title("ISSH — AI 工作台")
+        .inner_size(520.0, 760.0)
+        .min_inner_size(360.0, 480.0)
+        .center()
+        .resizable(true)
+        .decorations(true)
+        .visible(false)
+        .theme(Some(theme))
+        .background_color(bg)
+        .build()
+        .map_err(|e| format!("创建 AI 独立窗口失败: {e}"))?;
 
-    Ok(())
+        Ok(())
+    }
 }
 
 #[tauri::command]
 async fn show_ai_window(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(not(mobile))]
     if let Some(win) = app.get_webview_window("ai-workbench") {
         let _ = win.show();
         let _ = win.set_focus();
     }
+    #[cfg(mobile)]
+    let _ = app;
     Ok(())
 }
 
 #[tauri::command]
 async fn close_ai_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(win) = app.get_webview_window("ai-workbench") {
-        let _ = win.close();
+    #[cfg(not(mobile))]
+    {
+        if let Some(win) = app.get_webview_window("ai-workbench") {
+            let _ = win.close();
+        }
+        if let Some(main) = app.get_webview_window("main") {
+            let _ = main.unminimize();
+            let _ = main.set_focus();
+        }
     }
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.unminimize();
-        let _ = main.set_focus();
-    }
+    #[cfg(mobile)]
+    let _ = app;
     Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_updater::Builder::new().build())
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
-        .manage(SshManager::default())
+        .manage(SshManager::default());
+
+    #[cfg(not(mobile))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .setup(|app| {
             #[cfg(target_os = "windows")]
             if let Some(window) = app.get_webview_window("main") {

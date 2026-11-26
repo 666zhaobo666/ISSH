@@ -794,8 +794,8 @@ export function FileManagerPane({
 
       {/* Split View: Directory Tree (Left) + File List (Right) */}
       <div className="flex min-h-0 flex-1">
-        {/* Directory Tree */}
-        <div className="w-40 shrink-0 overflow-y-auto border-r border-white/10 bg-[#0a0e17] p-1.5">
+        {/* Directory Tree (hidden on mobile phones for clean full-width file list) */}
+        <div className="hidden w-40 shrink-0 overflow-y-auto border-r border-white/10 bg-[#0a0e17] p-1.5 md:block">
           <DirTreeNode
             path="/"
             name="/"

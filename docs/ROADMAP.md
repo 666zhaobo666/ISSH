@@ -62,6 +62,6 @@
 - [x] 实现服务端账号体系、VIP 卡密、Admin 管理后台（含 `.zip` 一键灾备）与 AES-256-GCM 加密无感心跳云同步服务
 
 ### Phase 5：Android 端适配与体验打磨（第 10~11 周）
-- [ ] 基于 Tauri 2.0 Mobile 构建 Android 客户端（复用 Rust 原生直连能力）
-- [ ] 适配小屏响应式布局（终端 / 文件 / 监控 / AI 独立 Tab 切换）
-- [ ] 增加终端虚拟快捷键栏（`Esc / Tab / Ctrl / Alt / 方向键`）并优化触屏交互
+- [x] 基于 Tauri 2.0 Mobile 适配 Android 客户端架构与 GitHub Actions 自动编译 `.apk` 流水线（复用 Rust 原生直连能力）
+- [x] 适配小屏响应式布局（主机 / 终端 / 文件 / 监控 / AI 全屏 5-Tab 切换 + 软键盘自动避让）
+- [x] 增加终端虚拟快捷键栏（`Esc / Tab / 黏滞 Ctrl / Alt / ^C / 方向键 / 符号 / 常用命令抽屉`）并优化触屏交互

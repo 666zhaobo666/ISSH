@@ -444,12 +444,12 @@ export function SettingsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
-      <div className="flex h-[84vh] w-[92vw] max-w-5xl overflow-hidden rounded-2xl border border-white/15 bg-[#0e1420] text-xs text-slate-200 shadow-2xl">
-        {/* Left Navigation */}
-        <nav className="flex w-48 shrink-0 flex-col border-r border-white/10 bg-[#0b0f17] p-3">
-          <div className="mb-4 px-2 text-sm font-semibold text-white">软件设置</div>
-          <div className="space-y-1">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-2 sm:p-4 backdrop-blur-sm">
+      <div className="flex h-[92vh] w-[96vw] flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0e1420] text-xs text-slate-200 shadow-2xl md:h-[84vh] md:w-[92vw] md:max-w-5xl md:flex-row">
+        {/* Left Navigation (horizontal scroll bar on mobile, sidebar on desktop) */}
+        <nav className="flex shrink-0 flex-row items-center gap-1 overflow-x-auto border-b border-white/10 bg-[#0b0f17] p-2 md:w-48 md:flex-col md:items-stretch md:border-b-0 md:border-r md:p-3">
+          <div className="mb-4 hidden px-2 text-sm font-semibold text-white md:block">软件设置</div>
+          <div className="flex flex-row gap-1 md:flex-col md:space-y-1">
             {(
               [
                 { id: 'providers', label: 'AI 服务商与模型', icon: Bot },

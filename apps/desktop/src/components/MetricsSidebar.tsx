@@ -27,12 +27,14 @@ interface NetSample {
 interface MetricsSidebarProps {
   metrics: SystemMetrics | null;
   connected: boolean;
+  fullWidth?: boolean;
   onOpenProcessManager?: () => void;
 }
 
 export function MetricsSidebar({
   metrics,
   connected,
+  fullWidth = false,
   onOpenProcessManager,
 }: MetricsSidebarProps) {
   const [selectedIface, setSelectedIface] = useState<string>('');
@@ -79,7 +81,11 @@ export function MetricsSidebar({
   );
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-white/10 bg-[#0e1420]/95 p-3 text-xs">
+    <aside
+      className={`flex shrink-0 flex-col gap-3 overflow-y-auto bg-[#0e1420]/95 p-3 text-xs ${
+        fullWidth ? 'h-full w-full' : 'w-64 border-r border-white/10'
+      }`}
+    >
       {/* Host Info */}
       <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
         <div className="flex items-center justify-between">
