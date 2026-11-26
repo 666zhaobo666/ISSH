@@ -1,7 +1,7 @@
 # Stage 1: Build @issh/core, @issh/admin, and unified full-featured Web/Desktop UI (@issh/desktop)
 FROM node:22-alpine AS frontend-builder
 WORKDIR /src
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* tsconfig.base.json ./
 COPY packages/core ./packages/core
 COPY apps/admin ./apps/admin
 COPY apps/desktop ./apps/desktop
