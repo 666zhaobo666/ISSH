@@ -11,7 +11,7 @@ RUN npm run build --workspace=@issh/core \
  && npm run build --workspace=@issh/desktop
 
 # Stage 2: Build Go server binary (pure Go SQLite, CGO_ENABLED=0)
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:1.26-alpine AS backend-builder
 WORKDIR /src/services/server
 COPY services/server/go.mod services/server/go.sum ./
 RUN go mod download
