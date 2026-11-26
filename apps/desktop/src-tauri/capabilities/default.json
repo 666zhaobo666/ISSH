@@ -5,7 +5,6 @@
   "windows": ["main", "ai-workbench"],
   "permissions": [
     "core:default",
-    "updater:default",
     "process:default"
   ]
 }
