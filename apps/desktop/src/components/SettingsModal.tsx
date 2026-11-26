@@ -44,6 +44,7 @@ import type { CloudUser } from '../cloud/cloudClient';
 import {
   APP_VERSION,
   checkAppUpdate,
+  installDesktopUpdate,
   type UpdateCheckResult,
 } from '../utils/appVersion';
 import { isTauriRuntime } from '../transport/runtime';
@@ -146,6 +147,9 @@ export function SettingsModal({
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateErr, setUpdateErr] = useState<string | null>(null);
   const [upToDateNotice, setUpToDateNotice] = useState(false);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [installProgress, setInstallProgress] = useState(0);
+  const [installPhase, setInstallPhase] = useState<'checking' | 'downloading' | 'installing'>('checking');
   const [localUpdateInfo, setLocalUpdateInfo] = useState<UpdateCheckResult | null>(
     updateInfo
   );
@@ -1424,16 +1428,69 @@ export function SettingsModal({
                       </pre>
                     )}
 
+                    {installingUpdate && (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between text-[11px] text-emerald-300">
+                          <span>
+                            {installPhase === 'checking'
+                              ? '正在校验更新包签名...'
+                              : installPhase === 'downloading'
+                                ? `正在下载更新包 (${installProgress}%)...`
+                                : '正在安装并准备重启...'}
+                          </span>
+                          <span className="font-mono">{installProgress}%</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-emerald-400 transition-all duration-200"
+                            style={{ width: `${installProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <a
-                        href={effectiveUpdateInfo.htmlUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 font-medium text-white hover:bg-emerald-400"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        下载最新版 ({effectiveUpdateInfo.tagName})
-                      </a>
+                      {isTauriRuntime() ? (
+                        <button
+                          type="button"
+                          disabled={installingUpdate}
+                          onClick={async () => {
+                            setInstallingUpdate(true);
+                            setUpdateErr(null);
+                            try {
+                              const ok = await installDesktopUpdate((pct, phase) => {
+                                setInstallProgress(pct);
+                                setInstallPhase(phase);
+                              });
+                              if (!ok) {
+                                setUpToDateNotice(true);
+                              }
+                            } catch (e) {
+                              setUpdateErr(
+                                `自动更新失败：${e instanceof Error ? e.message : String(e)}`
+                              );
+                            } finally {
+                              setInstallingUpdate(false);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 font-medium text-white transition hover:bg-emerald-400 disabled:opacity-50"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          {installingUpdate
+                            ? '正在更新...'
+                            : `一键更新并重启 (${effectiveUpdateInfo.tagName})`}
+                        </button>
+                      ) : (
+                        <a
+                          href={effectiveUpdateInfo.htmlUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 font-medium text-white hover:bg-emerald-400"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          下载最新版 ({effectiveUpdateInfo.tagName})
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}

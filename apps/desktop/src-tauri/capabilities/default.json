@@ -4,6 +4,8 @@
   "description": "Capability for the main and AI workbench windows",
   "windows": ["main", "ai-workbench"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "updater:default",
+    "process:default"
   ]
 }

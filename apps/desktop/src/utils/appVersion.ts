@@ -1,4 +1,5 @@
 import { getCloudServerUrl } from '../cloud/cloudClient';
+import { isTauriRuntime } from '../transport/runtime';
 
 export const APP_VERSION = '0.1.0';
 export const GITHUB_REPO_URL = 'https://github.com/666zhaobo666/ISSH';
@@ -119,4 +120,47 @@ export async function checkAppUpdate(forceRefresh = false): Promise<UpdateCheckR
     })),
     source: 'github',
   };
+}
+
+/**
+ * Desktop-only one-click signed update via Tauri Updater plugin.
+ * Downloads installer, verifies cryptographic signature, installs, and relaunches.
+ */
+export async function installDesktopUpdate(
+  onProgress?: (percent: number, phase: 'checking' | 'downloading' | 'installing') => void
+): Promise<boolean> {
+  if (!isTauriRuntime()) {
+    throw new Error('仅桌面客户端支持一键自动安装更新');
+  }
+  const { check } = await import('@tauri-apps/plugin-updater');
+  const { relaunch } = await import('@tauri-apps/plugin-process');
+
+  onProgress?.(0, 'checking');
+  const update = await check();
+  if (!update) {
+    return false;
+  }
+
+  let totalBytes = 0;
+  let downloadedBytes = 0;
+
+  await update.downloadAndInstall((event) => {
+    if (event.event === 'Started') {
+      totalBytes = event.data.contentLength ?? 0;
+      downloadedBytes = 0;
+      onProgress?.(0, 'downloading');
+    } else if (event.event === 'Progress') {
+      downloadedBytes += event.data.chunkLength;
+      const pct =
+        totalBytes > 0
+          ? Math.min(99, Math.round((downloadedBytes / totalBytes) * 100))
+          : 50;
+      onProgress?.(pct, 'downloading');
+    } else if (event.event === 'Finished') {
+      onProgress?.(100, 'installing');
+    }
+  });
+
+  await relaunch();
+  return true;
 }

@@ -25,6 +25,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis", "msi"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRDMTc2OTA5NDM1MjVFMTYKUldRV1hsSkRDV2tYVEVpMFVJY25QekhoSkNZMTZ0WDdRVGk4NVhvTXc1L2wxRFBiYWk4NVFCS0IK",
+      "endpoints": [
+        "https://github.com/666zhaobo666/ISSH/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
