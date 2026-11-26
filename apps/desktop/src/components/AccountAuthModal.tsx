@@ -23,7 +23,7 @@ interface AccountAuthModalProps {
 export function AccountAuthModal({
   open,
   required = false,
-  hideServerUrl = false,
+  hideServerUrl = true,
   onClose,
   onAuthenticated,
 }: AccountAuthModalProps) {

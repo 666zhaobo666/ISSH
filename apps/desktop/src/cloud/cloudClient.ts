@@ -33,14 +33,19 @@ const TOKEN_KEY = 'issh.cloud.token.v1';
 const USER_KEY = 'issh.cloud.user.v1';
 const SYNC_META_KEY = 'issh.cloud.sync_meta.v1';
 
+const DEFAULT_CLOUD_SERVER_URL = 'https://issh.cccg.top';
+
 export function getCloudServerUrl(): string {
-  const saved = localStorage.getItem(SERVER_URL_KEY)?.trim();
-  if (saved) return saved.replace(/\/+$/, '');
-  // On Web build served from the same origin, default to window.location.origin
-  if (typeof window !== 'undefined' && !window.location.origin.startsWith('http://localhost:1420') && !window.location.origin.startsWith('tauri://')) {
+  // On Web build served from the same origin, always use current origin
+  if (
+    typeof window !== 'undefined' &&
+    !window.location.origin.startsWith('http://localhost:1420') &&
+    !window.location.origin.startsWith('tauri://') &&
+    !window.location.origin.startsWith('http://tauri.localhost')
+  ) {
     return window.location.origin;
   }
-  return 'http://localhost:8080';
+  return DEFAULT_CLOUD_SERVER_URL;
 }
 
 export function setCloudServerUrl(url: string) {
