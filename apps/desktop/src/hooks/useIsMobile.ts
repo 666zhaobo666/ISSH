@@ -10,6 +10,11 @@ export function useIsMobile() {
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.matchMedia(MOBILE_QUERY).matches : false
   );
+  const [isTouch, setIsTouch] = useState<boolean>(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+      : false
+  );
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
@@ -17,6 +22,11 @@ export function useIsMobile() {
     const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener('change', onChange);
     setIsMobile(mq.matches);
+
+    const tq = window.matchMedia('(pointer: coarse)');
+    const onTouchChange = (e: MediaQueryListEvent) =>
+      setIsTouch(e.matches || navigator.maxTouchPoints > 0);
+    tq.addEventListener('change', onTouchChange);
 
     const vv = window.visualViewport;
     let baseHeight = window.innerHeight;
@@ -29,9 +39,10 @@ export function useIsMobile() {
 
     return () => {
       mq.removeEventListener('change', onChange);
+      tq.removeEventListener('change', onTouchChange);
       vv?.removeEventListener('resize', onResize);
     };
   }, []);
 
-  return { isMobile, keyboardOpen };
+  return { isMobile, isTouch, keyboardOpen };
 }

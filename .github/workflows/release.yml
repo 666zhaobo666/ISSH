@@ -84,9 +84,18 @@ jobs:
 
       - name: Initialize & build Android APK (Tauri 2.0 Mobile)
         working-directory: apps/desktop
-        env:
-          NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        shell: bash
         run: |
+          set -euo pipefail
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          NDK_DIR="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -z "$NDK_DIR" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.3.11579264"
+            NDK_DIR="$ANDROID_HOME/ndk/26.3.11579264"
+          fi
+          export NDK_HOME="$NDK_DIR"
+          echo "Using ANDROID_HOME=$ANDROID_HOME NDK_HOME=$NDK_HOME"
           npx tauri android init --ci
           npx tauri android build --apk --target aarch64
 

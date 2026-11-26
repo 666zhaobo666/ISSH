@@ -126,11 +126,13 @@ export function App() {
   const [bottomTab, setBottomTab] = useState<'files' | 'commands'>('files');
   const [processTabIds, setProcessTabIds] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<'hosts' | 'terminal' | 'process'>('hosts');
-  const { isMobile, keyboardOpen } = useIsMobile();
+  const { isMobile, isTouch, keyboardOpen } = useIsMobile();
   const [mobileTab, setMobileTab] = useState<'hosts' | 'terminal' | 'files' | 'metrics' | 'ai'>('hosts');
   const [mobileCommandsOpen, setMobileCommandsOpen] = useState(false);
   const [mobileProcessOpen, setMobileProcessOpen] = useState(false);
-  const [showMetrics, setShowMetrics] = useState(true);
+  const [showMetrics, setShowMetrics] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  );
   const [showAi, setShowAi] = useState(false);
   const [aiSettings, setAiSettings] = useState<AiSettingsState>(loadAiSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1413,6 +1415,17 @@ export function App() {
                 </div>
               )}
             </div>
+            {/* On touch tablets (>=768px), show the virtual shortcut keybar right below the terminal */}
+            {isTouch && tabs.length > 0 && (
+              <TerminalKeybar
+                disabled={activeTab?.status !== 'connected'}
+                onSendSequence={(seq) => {
+                  if (activeTab?.sessionId) {
+                    void appTransport.writePty(activeTab.sessionId, seq);
+                  }
+                }}
+              />
+            )}
           </section>
 
           {/* File Manager & Saved Commands Pane */}
