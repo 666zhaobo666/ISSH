@@ -1,0 +1,18 @@
+services:
+  issh-server:
+    build:
+      context: .
+      dockerfile: services/server/Dockerfile
+    container_name: issh-server
+    restart: unless-stopped
+    ports:
+      - "${ISSH_PORT:-8080}:8080"
+    environment:
+      - ISSH_LISTEN_ADDR=:8080
+      - ISSH_DATA_DIR=/data
+      - ISSH_MASTER_KEY=${ISSH_MASTER_KEY:-change-me-to-a-strong-32-char-secret-key}
+      - ISSH_ADMIN_EMAIL=${ISSH_ADMIN_EMAIL:-admin@issh.local}
+      - ISSH_ADMIN_PASSWORD=${ISSH_ADMIN_PASSWORD:-admin123456}
+      - ISSH_CORS_ORIGIN=${ISSH_CORS_ORIGIN:-*}
+    volumes:
+      - ./issh-data:/data

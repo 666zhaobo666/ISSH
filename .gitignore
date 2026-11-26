@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+target/
+*.tsbuildinfo
+
+# Tauri
+src-tauri/target/
+
+# Env & local secrets
+.env
+.env.local
+*.local
+.master_key
+
+# Server runtime data & compiled binaries
+services/server/data/
+services/server/issh-server
+services/server/issh-server.exe
+issh-data/
+*.db
+*.db-wal
+*.db-shm
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
