@@ -97,6 +97,19 @@ jobs:
           echo "Using ANDROID_HOME=$ANDROID_HOME NDK_HOME=$NDK_HOME"
           npx tauri android init --ci
 
+          # 0. Force strictly monotonic Android versionCode (2000000 + major*1000000 + minor*1000 + patch)
+          #    so Android never thinks 0.1.9 > 0.1.11!
+          TAG_CLEAN="${GITHUB_REF_NAME#v}"
+          IFS='.' read -r V_MAJ V_MIN V_PAT <<< "$TAG_CLEAN"
+          V_MAJ="${V_MAJ:-0}"; V_MIN="${V_MIN:-1}"; V_PAT="${V_PAT:-0}"
+          V_CODE=$(( 2000000 + V_MAJ * 1000000 + V_MIN * 1000 + V_PAT ))
+          echo "Setting Android versionName=$TAG_CLEAN versionCode=$V_CODE"
+          node -e "const fs=require('fs'),p='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle=c.bundle||{};c.bundle.android=Object.assign({},c.bundle.android,{versionCode:$V_CODE});fs.writeFileSync(p,JSON.stringify(c,null,2));"
+          cat > src-tauri/gen/android/app/tauri.properties <<EOF
+          tauri.android.versionName=$TAG_CLEAN
+          tauri.android.versionCode=$V_CODE
+          EOF
+
           # 1. Apply our real ISSH dark ">_" PC icon to all Android mipmap densities
           npx tauri icon src-tauri/icons/icon.png
           if [ -d "src-tauri/icons/android" ]; then
