@@ -65,6 +65,15 @@ export interface BannedIPItem {
   createdAt: number;
 }
 
+export interface SystemUpdateStatus {
+  agentOnline: boolean;
+  state: 'idle' | 'queued' | 'running' | 'success' | 'error';
+  startedAt?: number;
+  finishedAt?: number;
+  message?: string;
+  log?: string;
+}
+
 export interface AdminUser {
   id: string;
   email: string;

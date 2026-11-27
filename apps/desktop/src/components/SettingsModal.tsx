@@ -191,7 +191,12 @@ export function SettingsModal({
       });
       setProvSavedNotice(false);
     }
-  }, [activeProvider?.id]);
+  }, [
+    activeProvider?.id,
+    activeProvider?.name,
+    activeProvider?.baseUrl,
+    activeProvider?.apiKey,
+  ]);
 
   useEffect(() => {
     if (activeSkill) {
@@ -488,8 +493,8 @@ export function SettingsModal({
                 : '关于 ISSH 与版本更新';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-0 backdrop-blur-sm md:p-4">
-      <div className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#0e1420] text-xs text-slate-200 shadow-2xl md:h-[84vh] md:w-[92vw] md:max-w-5xl md:flex-row md:rounded-2xl md:border md:border-white/15">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-0 pt-[env(safe-area-inset-top)] backdrop-blur-sm md:p-4">
+      <div className="flex h-full w-screen flex-col overflow-hidden bg-[#0e1420] text-xs text-slate-200 shadow-2xl md:h-[84vh] md:w-[92vw] md:max-w-5xl md:flex-row md:rounded-2xl md:border md:border-white/15">
         {/* Phone Level-1 Main Menu (Native Mobile Settings Drill-Down) */}
         {isPhone && !mobileDetailOpen ? (
           <div className="flex h-full w-full flex-col bg-[#0b0f17]">

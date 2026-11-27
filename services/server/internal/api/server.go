@@ -185,6 +185,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/banned-ips", s.withAuth(s.handleAdminListBannedIPs, true))
 	mux.HandleFunc("POST /api/admin/banned-ips", s.withAuth(s.handleAdminBanIP, true))
 	mux.HandleFunc("DELETE /api/admin/banned-ips/{ip}", s.withAuth(s.handleAdminUnbanIP, true))
+	mux.HandleFunc("GET /api/admin/system/update/status", s.withAuth(s.handleAdminSystemUpdateStatus, true))
+	mux.HandleFunc("POST /api/admin/system/update", s.withAuth(s.handleAdminTriggerSystemUpdate, true))
 
 	// Avatar static serving
 	mux.HandleFunc("GET /avatars/", func(w http.ResponseWriter, r *http.Request) {

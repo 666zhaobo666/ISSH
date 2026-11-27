@@ -1,7 +1,7 @@
 import { getCloudServerUrl } from '../cloud/cloudClient';
 import { isTauriRuntime } from '../transport/runtime';
 
-export const APP_VERSION = '0.1.3';
+export const APP_VERSION = '0.1.4';
 export const GITHUB_REPO_URL = 'https://github.com/666zhaobo666/ISSH';
 
 export interface ReleaseAsset {

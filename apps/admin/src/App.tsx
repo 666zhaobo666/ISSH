@@ -34,6 +34,7 @@ import {
   type AuditLogItem,
   type BannedIPItem,
   type SystemSettings,
+  type SystemUpdateStatus,
   type VipTokenItem,
 } from './api';
 
@@ -57,13 +58,15 @@ export default function App() {
   const [tab, setTab] = useState<AdminTab>('dashboard');
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  // Dashboard & Server Release Check
+  // Dashboard & Server Release Check + One-Click Updater
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [latestRelease, setLatestRelease] = useState<{
     hasRelease: boolean;
     tagName?: string;
     notes?: string;
   } | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<SystemUpdateStatus | null>(null);
+  const [triggeringUpdate, setTriggeringUpdate] = useState(false);
 
   // Users
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -175,10 +178,20 @@ export default function App() {
     }
   };
 
+  const loadUpdateStatus = async () => {
+    try {
+      const st = await apiRequest<SystemUpdateStatus>('/api/admin/system/update/status');
+      setUpdateStatus(st);
+    } catch {
+      // Ignore transient disconnect while container restarts during update
+    }
+  };
+
   useEffect(() => {
     if (!authedUser) return;
     if (tab === 'dashboard') {
       void loadStats();
+      void loadUpdateStatus();
       apiRequest<{ hasRelease: boolean; tagName?: string; notes?: string }>('/api/app/latest')
         .then(setLatestRelease)
         .catch(() => {});
@@ -188,6 +201,16 @@ export default function App() {
     if (tab === 'security') void loadSecurity();
     if (tab === 'settings') void loadSettings();
   }, [authedUser, tab]);
+
+  // Poll update progress every 2s while queued or running
+  useEffect(() => {
+    if (!authedUser || tab !== 'dashboard') return;
+    if (updateStatus?.state !== 'queued' && updateStatus?.state !== 'running') return;
+    const timer = window.setInterval(() => {
+      void loadUpdateStatus();
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [authedUser, tab, updateStatus?.state]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -503,30 +526,111 @@ export default function App() {
               ))}
             </div>
 
-            {/* Server & Web Version Update Control (Admin-only) */}
-            <div className="rounded-xl border border-white/10 bg-[#101622] p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="font-semibold text-white">服务端与 Web 端版本更新管理</div>
-                <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 font-mono text-[11px] text-sky-300">
-                  最新 Release：{latestRelease?.hasRelease ? latestRelease.tagName : '检测中...'}
-                </span>
+            {/* Server & Web One-Click Update Control (Admin-only, Scheme A) */}
+            <div className="rounded-xl border border-white/10 bg-[#101622] p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="font-semibold text-white">服务端与 Web 端一键更新</div>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      updateStatus?.agentOnline
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : 'bg-amber-500/15 text-amber-300'
+                    }`}
+                  >
+                    {updateStatus?.agentOnline ? '● 更新守护进程在线' : '○ 未安装守护进程'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 font-mono text-[11px] text-sky-300">
+                    最新 Release：{latestRelease?.hasRelease ? latestRelease.tagName : '检测中...'}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={
+                      triggeringUpdate ||
+                      updateStatus?.state === 'queued' ||
+                      updateStatus?.state === 'running'
+                    }
+                    onClick={async () => {
+                      setTriggeringUpdate(true);
+                      try {
+                        await apiRequest('/api/admin/system/update', { method: 'POST' });
+                        showToast('ok', '已触发一键更新，正在拉取代码并重建容器...');
+                        await loadUpdateStatus();
+                      } catch (e) {
+                        showToast('err', e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setTriggeringUpdate(false);
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-sky-400 disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${
+                        triggeringUpdate ||
+                        updateStatus?.state === 'queued' ||
+                        updateStatus?.state === 'running'
+                          ? 'animate-spin'
+                          : ''
+                      }`}
+                    />
+                    {updateStatus?.state === 'queued' || updateStatus?.state === 'running'
+                      ? '正在更新构建中...'
+                      : '一键更新服务端与 Web 端'}
+                  </button>
+                </div>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Web 端随服务端容器统一发布，用户端不再展示更新按钮。在 VPS 项目目录执行以下命令即可一键无损更新服务端与 Web 端：
-              </p>
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#090d14] px-3 py-2 font-mono text-[11px] text-emerald-300">
-                <code>git pull && docker compose up -d --build</code>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void navigator.clipboard.writeText('git pull && docker compose up -d --build');
-                    showToast('ok', '已复制更新命令');
-                  }}
-                  className="flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-slate-200 hover:bg-white/20"
+
+              {updateStatus?.message && (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-[11px] ${
+                    updateStatus.state === 'error'
+                      ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                      : updateStatus.state === 'success'
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                        : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                  }`}
                 >
-                  <Copy className="h-3 w-3" /> 复制
-                </button>
-              </div>
+                  {updateStatus.message}
+                  {updateStatus.state === 'success' && (
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      className="ml-3 rounded bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-400"
+                    >
+                      刷新页面生效
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {!updateStatus?.agentOnline && (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-slate-400">
+                    首次启用面板按钮一键更新，只需在 VPS 项目目录运行一次以下安装命令即可（之后永久在面板点按钮更新）：
+                  </p>
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#090d14] px-3 py-2 font-mono text-[11px] text-emerald-300">
+                    <code>sudo bash deploy/install-updater.sh</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText('sudo bash deploy/install-updater.sh');
+                        showToast('ok', '已复制守护进程安装命令');
+                      }}
+                      className="flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-slate-200 hover:bg-white/20"
+                    >
+                      <Copy className="h-3 w-3" /> 复制
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {updateStatus?.log && (
+                <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-[#090d14] p-3 font-mono text-[11px] leading-relaxed text-slate-300">
+                  {updateStatus.log}
+                </pre>
+              )}
             </div>
           </div>
         )}

@@ -174,7 +174,8 @@ export function App() {
   const runSyncCycle = async (
     interactiveOnDivergence = false,
     userOverride?: CloudUser | null,
-    silent = false
+    silent = false,
+    forcePull = false
   ) => {
     const activeUser = userOverride !== undefined ? userOverride : cloudUser;
     if (!activeUser || !getCloudToken()) return;
@@ -247,8 +248,8 @@ export function App() {
       let nextProfileVer = meta.profileVersion;
       let nextThreadsVer = meta.threadsMaxVersion;
 
-      // Pull newer cloud profile if available
-      if (hb.hasCloudProfile && hb.profileVersion > meta.profileVersion) {
+      // Pull newer cloud profile if available (or forcePull right after login)
+      if (hb.hasCloudProfile && (forcePull || hb.profileVersion > meta.profileVersion)) {
         const pulled = await pullCloudProfile();
         if (pulled.exists && pulled.profile) {
           applyBundleToState(pulled.profile);
@@ -260,9 +261,9 @@ export function App() {
         nextProfileVer = pushed.version;
       }
 
-      // Pull incremental AI threads if cloud is ahead
-      if (hb.threadsMaxVersion > meta.threadsMaxVersion) {
-        const pulledT = await pullCloudThreads(meta.threadsMaxVersion);
+      // Pull incremental AI threads if cloud is ahead (or forcePull on login)
+      if (forcePull || hb.threadsMaxVersion > meta.threadsMaxVersion) {
+        const pulledT = await pullCloudThreads(forcePull ? 0 : meta.threadsMaxVersion);
         const incoming = pulledT.threads
           .filter((t) => !t.deleted && t.data)
           .map((t) => t.data as LocalAiThread);
@@ -387,12 +388,24 @@ export function App() {
   }, []);
 
   // 30-second silent background heartbeat sync (no UI flicker; also syncs AI threads)
+  // Plus immediate silent pull when returning to foreground / focusing app
   useEffect(() => {
     if (!cloudUser) return;
     const timer = window.setInterval(() => {
       void runSyncCycle(false, undefined, true);
     }, 30_000);
-    return () => window.clearInterval(timer);
+    const onForeground = () => {
+      if (document.visibilityState === 'visible') {
+        void runSyncCycle(false, undefined, true);
+      }
+    };
+    window.addEventListener('focus', onForeground);
+    document.addEventListener('visibilitychange', onForeground);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onForeground);
+      document.removeEventListener('visibilitychange', onForeground);
+    };
   }, [cloudUser]);
 
   // Immediate silent push (~300ms debounce) when VIP user modifies hosts/settings/theme (AI threads stay on 30s heartbeat)
@@ -753,7 +766,7 @@ export function App() {
             if (!u.vipActive) {
               setHosts([]);
             } else {
-              void runSyncCycle(true, u);
+              void runSyncCycle(true, u, false, true);
             }
           }}
         />
@@ -834,7 +847,10 @@ export function App() {
           onOpenAuth={() => setAuthModalOpen(true)}
           onCloudUserChange={(nextUser) => {
             setCloudUser(nextUser);
-            if (!nextUser) setSyncStatus('idle');
+            if (!nextUser) {
+              setSyncStatus('idle');
+              setSyncMeta({ userId: '', profileVersion: 0, threadsMaxVersion: 0, lastSyncedAt: 0 });
+            }
           }}
           onManualSync={() => void runSyncCycle(true)}
           updateInfo={updateInfo}
@@ -847,7 +863,7 @@ export function App() {
           onClose={() => setAuthModalOpen(false)}
           onAuthenticated={(u) => {
             setCloudUser(u);
-            void runSyncCycle(true, u);
+            void runSyncCycle(true, u, false, true);
           }}
         />
 
@@ -1312,6 +1328,7 @@ export function App() {
           setCloudUser(nextUser);
           if (!nextUser) {
             setSyncStatus('idle');
+            setSyncMeta({ userId: '', profileVersion: 0, threadsMaxVersion: 0, lastSyncedAt: 0 });
           }
         }}
         onManualSync={() => void runSyncCycle(true)}

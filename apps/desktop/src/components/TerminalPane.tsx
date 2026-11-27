@@ -223,22 +223,15 @@ export function TerminalPane({
 
         if (!sid) return;
         const hStep = 28;
-        const vStep = 34;
 
-        if (Math.abs(accumX) >= hStep && Math.abs(accumX) >= Math.abs(accumY)) {
+        // Only horizontal 1-finger swipe controls cursor left/right (vertical swipe disabled)
+        if (Math.abs(accumX) >= hStep && Math.abs(accumX) > Math.abs(accumY) * 1.2) {
           e.preventDefault();
           const steps = Math.trunc(accumX / hStep);
           const seq = steps > 0 ? '\x1b[C' : '\x1b[D';
           void transport.writePty(sid, seq.repeat(Math.abs(steps)));
           accumX -= steps * hStep;
           accumY = 0;
-        } else if (Math.abs(accumY) >= vStep && Math.abs(accumY) > Math.abs(accumX)) {
-          e.preventDefault();
-          const steps = Math.trunc(accumY / vStep);
-          const seq = steps < 0 ? '\x1b[A' : '\x1b[B';
-          void transport.writePty(sid, seq.repeat(Math.abs(steps)));
-          accumY -= steps * vStep;
-          accumX = 0;
         }
       }
     };

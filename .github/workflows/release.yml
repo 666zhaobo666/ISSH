@@ -48,8 +48,7 @@ jobs:
           releaseBody: |
             ## ISSH ${{ github.ref_name }}
 
-            - Windows 安装包（`.exe` / `.msi`）支持客户端内一键自动更新。
-            - 详见提交记录。
+            - 已发布新版本，点击更新即可获取最新功能与体验优化。
           releaseDraft: false
           prerelease: false
 
@@ -123,24 +122,39 @@ jobs:
           </resources>
           EOF
 
-          # 3. Force WindowCompat.setDecorFitsSystemWindows(window, true) in MainActivity.kt
+          # 3. Physically inset the Android root content view by systemBars() + ime() so nothing (even scrolling or modals) can ever overlap the top status bar
           MAIN_ACT=$(find src-tauri/gen/android/app/src/main/java -name "MainActivity.kt" | head -n 1)
           if [ -n "$MAIN_ACT" ]; then
             PKG_LINE=$(head -n 1 "$MAIN_ACT")
             cat > "$MAIN_ACT" <<EOF
           $PKG_LINE
 
+          import android.graphics.Color
           import android.os.Bundle
+          import android.view.View
+          import androidx.core.view.ViewCompat
           import androidx.core.view.WindowCompat
+          import androidx.core.view.WindowInsetsCompat
 
           class MainActivity : TauriActivity() {
             override fun onCreate(savedInstanceState: Bundle?) {
               super.onCreate(savedInstanceState)
               WindowCompat.setDecorFitsSystemWindows(window, true)
+              window.statusBarColor = Color.parseColor("#0B0F17")
+              window.navigationBarColor = Color.parseColor("#101622")
+              val rootView = findViewById<View>(android.R.id.content)
+              rootView.setBackgroundColor(Color.parseColor("#0B0F17"))
+              ViewCompat.setOnApplyWindowInsetsListener(rootView) { v, windowInsets ->
+                val insets = windowInsets.getInsets(
+                  WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime()
+                )
+                v.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+                WindowInsetsCompat.CONSUMED
+              }
             }
           }
           EOF
-            echo "Patched $MAIN_ACT for non-edge-to-edge status bar inset"
+            echo "Patched $MAIN_ACT with native WindowInsets root padding"
           fi
 
           npx tauri android build --apk --target aarch64
