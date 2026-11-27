@@ -456,6 +456,49 @@ export function App() {
     setSettingsOpen(true);
   };
 
+  // Android hardware/gesture back button handler (returns true if consumed, false to trigger double-back exit)
+  useEffect(() => {
+    const win = window as Window & {
+      __isshHandleBack?: () => boolean;
+      __isshSettingsBack?: () => boolean;
+    };
+    win.__isshHandleBack = () => {
+      if (win.__isshSettingsBack?.()) return true;
+      if (conflictState) {
+        setConflictState(null);
+        return true;
+      }
+      if (connectModalOpen) {
+        setConnectModalOpen(false);
+        setEditingHost(null);
+        return true;
+      }
+      if (authModalOpen) {
+        setAuthModalOpen(false);
+        return true;
+      }
+      if (settingsOpen) {
+        setSettingsOpen(false);
+        return true;
+      }
+      if (isMobileOrTablet && mobileTab !== 'hosts') {
+        setMobileTab('hosts');
+        return true;
+      }
+      return false;
+    };
+    return () => {
+      delete win.__isshHandleBack;
+    };
+  }, [
+    conflictState,
+    connectModalOpen,
+    authModalOpen,
+    settingsOpen,
+    isMobileOrTablet,
+    mobileTab,
+  ]);
+
   useEffect(() => {
     const root = document.documentElement;
     if (uiMode === 'light') {

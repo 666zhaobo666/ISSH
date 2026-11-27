@@ -151,6 +151,8 @@ jobs:
           import android.view.View
           import android.webkit.JavascriptInterface
           import android.webkit.WebView
+          import android.widget.Toast
+          import androidx.activity.OnBackPressedCallback
           import androidx.core.content.FileProvider
           import androidx.core.view.ViewCompat
           import androidx.core.view.WindowCompat
@@ -162,6 +164,9 @@ jobs:
           import java.net.URL
 
           class MainActivity : TauriActivity() {
+            private var appWebView: WebView? = null
+            private var lastBackPressedAt: Long = 0L
+
             override fun onCreate(savedInstanceState: Bundle?) {
               super.onCreate(savedInstanceState)
               WindowCompat.setDecorFitsSystemWindows(window, true)
@@ -176,10 +181,31 @@ jobs:
                 v.setPadding(insets.left, insets.top, insets.right, insets.bottom)
                 WindowInsetsCompat.CONSUMED
               }
+
+              onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                  val wv = appWebView
+                  if (wv == null) {
+                    finish()
+                    return
+                  }
+                  wv.evaluateJavascript("window.__isshHandleBack ? window.__isshHandleBack() : false") { result ->
+                    if (result == "true") return@evaluateJavascript
+                    val now = System.currentTimeMillis()
+                    if (now - lastBackPressedAt < 2000L) {
+                      moveTaskToBack(true)
+                    } else {
+                      lastBackPressedAt = now
+                      Toast.makeText(this@MainActivity, "再按一次返回键退出 ISSH", Toast.LENGTH_SHORT).show()
+                    }
+                  }
+                }
+              })
             }
 
             override fun onWebViewCreate(webView: WebView) {
               super.onWebViewCreate(webView)
+              appWebView = webView
               webView.addJavascriptInterface(AndroidUpdaterBridge(this, webView), "ISSHAndroidUpdater")
             }
 

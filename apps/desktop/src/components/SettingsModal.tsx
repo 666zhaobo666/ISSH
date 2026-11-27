@@ -177,6 +177,27 @@ export function SettingsModal({
     }
   }, [open, initialTab]);
 
+  // Android hardware/gesture back button support inside SettingsModal
+  useEffect(() => {
+    if (!open) return;
+    const win = window as Window & { __isshSettingsBack?: () => boolean };
+    win.__isshSettingsBack = () => {
+      if (addPickerOpen) {
+        setAddPickerOpen(false);
+        return true;
+      }
+      if (isPhone && mobileDetailOpen) {
+        setMobileDetailOpen(false);
+        return true;
+      }
+      onClose();
+      return true;
+    };
+    return () => {
+      delete win.__isshSettingsBack;
+    };
+  }, [open, addPickerOpen, isPhone, mobileDetailOpen, onClose]);
+
   const activeProvider =
     settings.providers.find((p) => p.id === selectedProviderId) ??
     settings.providers[0];

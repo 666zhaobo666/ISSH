@@ -1,6 +1,6 @@
 [package]
 name = "issh-desktop"
-version = "0.1.7"
+version = "0.1.8"
 description = "ISSH — Modern AI SSH Workspace"
 authors = ["ISSH"]
 edition = "2021"
