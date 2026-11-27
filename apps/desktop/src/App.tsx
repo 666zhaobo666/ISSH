@@ -153,6 +153,7 @@ export function App() {
   } | null>(null);
   const [resolvingConflict, setResolvingConflict] = useState(false);
   const suppressNextPushRef = useRef(false);
+  const syncReadyForUserRef = useRef<string | null>(null);
   const pushTimerRef = useRef<number | null>(null);
 
   const applyBundleToState = (bundle: IsshUserProfileBundle) => {
@@ -211,8 +212,10 @@ export function App() {
           localProfile.hosts.length > 0 ||
           localThreads.some((t) => (t.messages?.length ?? 0) > 0);
 
-        const pulled = await pullCloudProfile();
-        const pulledThreadsRes = await pullCloudThreads(0);
+        const [pulled, pulledThreadsRes] = await Promise.all([
+          pullCloudProfile(),
+          pullCloudThreads(0),
+        ]);
         const cloudThreads = pulledThreadsRes.threads
           .filter((t) => !t.deleted && t.data)
           .map((t) => t.data as LocalAiThread);
@@ -241,6 +244,7 @@ export function App() {
           });
           setLastSyncedAt(now);
           setSyncStatus('synced');
+          syncReadyForUserRef.current = activeUser.id;
           return;
         }
       }
@@ -298,6 +302,7 @@ export function App() {
         lastSyncedAt: now,
       });
       setLastSyncedAt(now);
+      syncReadyForUserRef.current = activeUser.id;
       if (!silent) setSyncStatus('synced');
     } catch {
       if (!silent) setSyncStatus('error');
@@ -357,6 +362,7 @@ export function App() {
         lastSyncedAt: now,
       });
       setLastSyncedAt(now);
+      syncReadyForUserRef.current = cloudUser.id;
       setSyncStatus('synced');
       setConflictState(null);
     } catch {
@@ -409,8 +415,16 @@ export function App() {
   }, [cloudUser]);
 
   // Immediate silent push (~300ms debounce) when VIP user modifies hosts/settings/theme (AI threads stay on 30s heartbeat)
+  // Guarded by syncReadyForUserRef so a fresh login NEVER pushes an empty local profile before initial pull completes!
   useEffect(() => {
-    if (!cloudUser?.vipActive || suppressNextPushRef.current || conflictState) return;
+    if (
+      !cloudUser?.vipActive ||
+      syncReadyForUserRef.current !== cloudUser.id ||
+      suppressNextPushRef.current ||
+      conflictState
+    ) {
+      return;
+    }
     if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current);
     pushTimerRef.current = window.setTimeout(async () => {
       try {
@@ -430,7 +444,7 @@ export function App() {
     return () => {
       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current);
     };
-  }, [hosts, aiSettings, themeId, cloudUser?.vipActive]);
+  }, [hosts, aiSettings, themeId]);
 
   const handleUpdateAiSettings = (next: AiSettingsState) => {
     setAiSettings(next);
@@ -862,6 +876,7 @@ export function App() {
           open={authModalOpen}
           onClose={() => setAuthModalOpen(false)}
           onAuthenticated={(u) => {
+            syncReadyForUserRef.current = null;
             setCloudUser(u);
             void runSyncCycle(true, u, false, true);
           }}

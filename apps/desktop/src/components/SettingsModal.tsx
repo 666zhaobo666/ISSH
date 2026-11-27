@@ -46,6 +46,8 @@ import type { CloudUser } from '../cloud/cloudClient';
 import {
   APP_VERSION,
   checkAppUpdate,
+  hasAndroidInAppUpdater,
+  installAndroidUpdate,
   installDesktopUpdate,
   type UpdateCheckResult,
 } from '../utils/appVersion';
@@ -1568,17 +1570,51 @@ export function SettingsModal({
 
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         {isAndroid ? (
-                          <a
-                            href={apkAsset?.downloadUrl || effectiveUpdateInfo.htmlUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-2 font-medium text-white hover:bg-emerald-400"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                            {apkAsset
-                              ? `下载新版 APK (${effectiveUpdateInfo.tagName})`
-                              : `前往下载新版 (${effectiveUpdateInfo.tagName})`}
-                          </a>
+                          apkAsset && hasAndroidInAppUpdater() ? (
+                            <button
+                              type="button"
+                              disabled={installingUpdate}
+                              onClick={async () => {
+                                setInstallingUpdate(true);
+                                setInstallProgress(0);
+                                setInstallPhase('downloading');
+                                setUpdateErr(null);
+                                try {
+                                  await installAndroidUpdate(
+                                    apkAsset.downloadUrl,
+                                    (pct, phase) => {
+                                      setInstallProgress(pct);
+                                      setInstallPhase(phase);
+                                    }
+                                  );
+                                } catch (e) {
+                                  setUpdateErr(
+                                    `更新失败：${e instanceof Error ? e.message : String(e)}`
+                                  );
+                                } finally {
+                                  setInstallingUpdate(false);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-2 font-medium text-white transition hover:bg-emerald-400 disabled:opacity-50"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              {installingUpdate
+                                ? '正在下载并调起安装...'
+                                : `一键更新 (${effectiveUpdateInfo.tagName})`}
+                            </button>
+                          ) : (
+                            <a
+                              href={apkAsset?.downloadUrl || effectiveUpdateInfo.htmlUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-2 font-medium text-white hover:bg-emerald-400"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              {apkAsset
+                                ? `下载新版 APK (${effectiveUpdateInfo.tagName})`
+                                : `前往下载新版 (${effectiveUpdateInfo.tagName})`}
+                            </a>
+                          )
                         ) : (
                           <button
                             type="button"

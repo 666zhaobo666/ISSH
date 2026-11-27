@@ -1,7 +1,7 @@
 import { getCloudServerUrl } from '../cloud/cloudClient';
 import { isTauriRuntime } from '../transport/runtime';
 
-export const APP_VERSION = '0.1.5';
+export const APP_VERSION = '0.1.6';
 export const GITHUB_REPO_URL = 'https://github.com/666zhaobo666/ISSH';
 
 export interface ReleaseAsset {
@@ -163,4 +163,61 @@ export async function installDesktopUpdate(
 
   await relaunch();
   return true;
+}
+
+interface AndroidUpdaterWindow extends Window {
+  ISSHAndroidUpdater?: {
+    downloadAndInstall: (apkUrl: string) => void;
+  };
+  __isshAndroidUpdateProgress?: (pct: number, phase: 'downloading' | 'installing') => void;
+  __isshAndroidUpdateError?: (msg: string) => void;
+}
+
+export function hasAndroidInAppUpdater(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    Boolean((window as AndroidUpdaterWindow).ISSHAndroidUpdater?.downloadAndInstall)
+  );
+}
+
+/**
+ * Android native in-app APK downloader & installer via MainActivity JavascriptInterface.
+ * Downloads APK directly inside the app with live progress and launches system installer dialog.
+ */
+export function installAndroidUpdate(
+  apkUrl: string,
+  onProgress?: (percent: number, phase: 'downloading' | 'installing') => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const win = window as AndroidUpdaterWindow;
+    const bridge = win.ISSHAndroidUpdater;
+    if (!bridge?.downloadAndInstall) {
+      reject(new Error('当前安装包版本较旧，请先下载安装新版 APK 后即可支持应用内一键更新'));
+      return;
+    }
+
+    const cleanup = () => {
+      delete win.__isshAndroidUpdateProgress;
+      delete win.__isshAndroidUpdateError;
+    };
+
+    win.__isshAndroidUpdateProgress = (pct, phase) => {
+      onProgress?.(pct, phase);
+      if (phase === 'installing') {
+        cleanup();
+        resolve();
+      }
+    };
+    win.__isshAndroidUpdateError = (msg) => {
+      cleanup();
+      reject(new Error(msg || '下载或安装失败'));
+    };
+
+    try {
+      bridge.downloadAndInstall(apkUrl);
+    } catch (e) {
+      cleanup();
+      reject(e instanceof Error ? e : new Error(String(e)));
+    }
+  });
 }
