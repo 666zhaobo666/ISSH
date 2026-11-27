@@ -143,9 +143,8 @@ jobs:
           MAIN_ACT=$(find src-tauri/gen/android/app/src/main/java -name "MainActivity.kt" | head -n 1)
           if [ -n "$MAIN_ACT" ]; then
             PKG_LINE=$(head -n 1 "$MAIN_ACT")
-            cat > "$MAIN_ACT" <<EOF
-          $PKG_LINE
-
+            printf '%s\n\n' "$PKG_LINE" > "$MAIN_ACT"
+            cat >> "$MAIN_ACT" <<'EOF'
           import android.content.Intent
           import android.graphics.Color
           import android.os.Bundle
