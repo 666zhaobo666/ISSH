@@ -97,6 +97,32 @@ jobs:
           export NDK_HOME="$NDK_DIR"
           echo "Using ANDROID_HOME=$ANDROID_HOME NDK_HOME=$NDK_HOME"
           npx tauri android init --ci
+
+          # 1. Apply our real ISSH dark ">_" PC icon to all Android mipmap densities
+          npx tauri icon src-tauri/icons/icon.png
+          if [ -d "src-tauri/icons/android" ]; then
+            cp -rf src-tauri/icons/android/* src-tauri/gen/android/app/src/main/res/
+          fi
+          mkdir -p src-tauri/gen/android/app/src/main/res/values
+          cat > src-tauri/gen/android/app/src/main/res/values/ic_launcher_background.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#0C1018</color>
+          </resources>
+          EOF
+
+          # 2. Prevent Android 15 edge-to-edge from overlapping the top status bar & camera notch
+          cat > src-tauri/gen/android/app/src/main/res/values/themes.xml <<'EOF'
+          <resources xmlns:tools="http://schemas.android.com/tools">
+              <style name="Theme.issh_desktop" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="android:statusBarColor">#0B0F17</item>
+                  <item name="android:navigationBarColor">#101622</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
+              </style>
+          </resources>
+          EOF
+
           npx tauri android build --apk --target aarch64
 
       - name: Sign & Upload Android APK to GitHub Release

@@ -46,10 +46,10 @@ export function TerminalKeybar({
   };
 
   const btnBase =
-    'flex h-8 min-w-[36px] shrink-0 items-center justify-center rounded-md border border-white/10 bg-[#141c2b] px-2 font-mono text-[11px] font-medium text-slate-200 active:scale-95 active:bg-sky-500/30 disabled:opacity-40';
+    'flex h-10 min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#141c2b] px-2.5 font-mono text-xs font-medium text-slate-100 active:scale-95 active:bg-sky-500/30 disabled:opacity-40';
 
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto border-t border-white/10 bg-[#0d121c] px-2 py-1.5 select-none">
+    <div className="flex items-center gap-1.5 overflow-x-auto border-t border-white/10 bg-[#0d121c] px-2.5 py-2 select-none">
       <button
         type="button"
         disabled={disabled}

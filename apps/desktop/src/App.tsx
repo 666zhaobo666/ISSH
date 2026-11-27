@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import {
-  Activity,
   Bot,
   Cloud,
   CloudOff,
@@ -39,8 +38,8 @@ import { ProcessManagerPane } from './components/ProcessManagerPane';
 import { FileManagerPane } from './components/FileManagerPane';
 import { HostsManagerPane } from './components/HostsManagerPane';
 import { AiSidebar } from './components/AiSidebar';
-import { TerminalKeybar } from './components/TerminalKeybar';
-import { useIsMobile } from './hooks/useIsMobile';
+import { useDeviceLayout } from './hooks/useDeviceLayout';
+import { MobileShell, type MobileNavTab } from './mobile/MobileShell';
 import type { AiContextSyncPayload } from './components/AiStandaloneWindow';
 import { SettingsModal, type SettingsTab } from './components/SettingsModal';
 import { AccountAuthModal } from './components/AccountAuthModal';
@@ -126,13 +125,9 @@ export function App() {
   const [bottomTab, setBottomTab] = useState<'files' | 'commands'>('files');
   const [processTabIds, setProcessTabIds] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<'hosts' | 'terminal' | 'process'>('hosts');
-  const { isMobile, isTouch, keyboardOpen } = useIsMobile();
-  const [mobileTab, setMobileTab] = useState<'hosts' | 'terminal' | 'files' | 'metrics' | 'ai'>('hosts');
-  const [mobileCommandsOpen, setMobileCommandsOpen] = useState(false);
-  const [mobileProcessOpen, setMobileProcessOpen] = useState(false);
-  const [showMetrics, setShowMetrics] = useState<boolean>(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
-  );
+  const { mode: deviceMode, isMobileOrTablet, keyboardOpen } = useDeviceLayout();
+  const [mobileTab, setMobileTab] = useState<MobileNavTab>('hosts');
+  const [showMetrics, setShowMetrics] = useState(true);
   const [showAi, setShowAi] = useState(false);
   const [aiSettings, setAiSettings] = useState<AiSettingsState>(loadAiSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -733,293 +728,57 @@ export function App() {
     );
   }
 
-  // Termius-inspired Mobile Full-Screen 5-Tab Layout (< 768px)
-  if (isMobile) {
+  // Dedicated Termius-style Touch Shell for Android/iOS Phones & Tablets
+  if (isMobileOrTablet) {
     return (
-      <div className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#0b0f17] text-slate-200">
-        {/* Compact Mobile Top Bar */}
-        <header className="flex h-11 shrink-0 items-center justify-between border-b border-white/10 bg-[#101622] px-3">
-          <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
-            {tabs.length > 0 ? (
-              tabs.map((tab) => {
-                const isCur = tab.tabId === activeTabId;
-                return (
-                  <button
-                    key={tab.tabId}
-                    type="button"
-                    onClick={() => {
-                      setActiveTabId(tab.tabId);
-                      if (mobileTab === 'hosts') setMobileTab('terminal');
-                    }}
-                    className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                      isCur
-                        ? 'border-sky-500/50 bg-sky-500/15 text-sky-200'
-                        : 'border-white/10 bg-white/5 text-slate-400'
-                    }`}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        tab.status === 'connected'
-                          ? 'bg-emerald-400'
-                          : tab.status === 'connecting'
-                            ? 'bg-amber-400 animate-pulse'
-                            : 'bg-rose-400'
-                      }`}
-                    />
-                    <span className="max-w-[100px] truncate">{tab.host.name}</span>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="flex items-center gap-2 font-semibold text-white">
-                <img src="./favicon.png" alt="ISSH" className="h-5 w-5 rounded" />
-                <span className="text-sm">ISSH</span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setUiMode((m) => (m === 'dark' ? 'light' : 'dark'))}
-              className="rounded-md border border-white/10 bg-white/5 p-1.5 text-slate-300"
-            >
-              {uiMode === 'light' ? (
-                <Sun className="h-3.5 w-3.5 text-amber-400" />
-              ) : (
-                <Moon className="h-3.5 w-3.5 text-indigo-400" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => openSettings(updateInfo?.hasUpdate ? 'about' : 'providers')}
-              className="relative rounded-md border border-white/10 bg-white/5 p-1.5 text-slate-300"
-            >
-              <Settings className="h-3.5 w-3.5" />
-              {updateInfo?.hasUpdate && (
-                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-rose-500" />
-              )}
-            </button>
-            {cloudUser ? (
-              <button
-                type="button"
-                onClick={() => openSettings('sync')}
-                className="flex h-7 items-center gap-1 rounded-full border border-white/10 bg-white/5 pl-1 pr-2 text-[10px]"
-              >
-                {cloudUser.avatarUrl ? (
-                  <img
-                    src={resolveAvatarUrl(cloudUser.avatarUrl)}
-                    alt=""
-                    className="h-5 w-5 rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500/25 font-semibold text-sky-300">
-                    {(cloudUser.nickname || cloudUser.email)[0]?.toUpperCase()}
-                  </span>
-                )}
-                {cloudUser.vipActive && <Crown className="h-3 w-3 text-amber-400" />}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAuthModalOpen(true)}
-                className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300"
-              >
-                登录
-              </button>
-            )}
-          </div>
-        </header>
-
-        {/* Full-Screen Single Active Tab */}
-        <div className="relative min-h-0 flex-1 overflow-hidden">
-          {mobileTab === 'hosts' && (
-            <HostsManagerPane
-              hosts={hosts}
-              onConnect={(h) => void handleConnect(h)}
-              onNewHost={() => {
-                setEditingHost(null);
-                setConnectModalOpen(true);
-              }}
-              onEditHost={(h) => {
-                setEditingHost(h);
-                setConnectModalOpen(true);
-              }}
-              onDuplicateHost={duplicateHost}
-              onDeleteHost={deleteHost}
-            />
-          )}
-
-          {/* Keep Terminals mounted so SSH sessions never drop when switching tabs */}
-          <div
-            className={`flex h-full w-full flex-col ${
-              mobileTab === 'terminal' ? 'flex' : 'hidden'
-            }`}
-          >
-            <div className="min-h-0 flex-1 bg-[#0b0f17]">
-              {tabs.length > 0 ? (
-                tabs.map((tab) => (
-                  <TerminalPane
-                    key={tab.tabId}
-                    sessionId={tab.sessionId}
-                    status={tab.status}
-                    error={tab.error}
-                    hostLabel={`${tab.host.username}@${tab.host.host}:${tab.host.port}`}
-                    active={tab.tabId === activeTabId && mobileTab === 'terminal'}
-                    theme={currentTheme.theme}
-                    transport={appTransport}
-                    onReady={setPtySize}
-                    onRegisterContext={(handle) => {
-                      termContextMapRef.current.set(tab.tabId, handle);
-                    }}
-                  />
-                ))
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-slate-500">
-                  <p>请先在「主机」页选择或新建 SSH 连接</p>
-                  <button
-                    type="button"
-                    onClick={() => setMobileTab('hosts')}
-                    className="rounded-lg bg-sky-500/20 px-4 py-2 text-sky-300"
-                  >
-                    前往主机列表
-                  </button>
-                </div>
-              )}
-            </div>
-            <TerminalKeybar
-              disabled={activeTab?.status !== 'connected'}
-              onSendSequence={(seq) => {
-                if (activeTab?.sessionId) {
-                  void appTransport.writePty(activeTab.sessionId, seq);
-                }
-              }}
-              onOpenCommands={() => setMobileCommandsOpen(true)}
-            />
-          </div>
-
-          {mobileTab === 'files' && (
-            <div className="h-full w-full">
-              <FileManagerPane
-                sessionId={activeTab?.sessionId ?? null}
-                terminalCwd={activeTab?.cwd ?? '~'}
-                transport={appTransport}
-              />
-            </div>
-          )}
-
-          {mobileTab === 'metrics' && (
-            <div className="h-full w-full overflow-hidden">
-              {mobileProcessOpen && activeTab && activeTab.sessionId ? (
-                <div className="flex h-full flex-col">
-                  <div className="flex items-center justify-between border-b border-white/10 bg-[#101622] px-3 py-2 text-xs">
-                    <span className="font-semibold text-white">进程管理</span>
-                    <button
-                      type="button"
-                      onClick={() => setMobileProcessOpen(false)}
-                      className="rounded bg-white/10 px-2.5 py-1 text-slate-300"
-                    >
-                      返回监控概览
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <ProcessManagerPane
-                      sessionId={activeTab.sessionId}
-                      transport={appTransport}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <MetricsSidebar
-                  fullWidth
-                  metrics={metrics}
-                  connected={activeTab?.status === 'connected'}
-                  onOpenProcessManager={() => setMobileProcessOpen(true)}
-                />
-              )}
-            </div>
-          )}
-
-          {mobileTab === 'ai' && (
-            <div className="h-full w-full">
-              <AiSidebar
-                standalone
-                activeSessionId={activeTab?.sessionId ?? null}
-                connectedContexts={buildConnectedContexts()}
-                savedHosts={hosts}
-                onConnectHost={(h) => void handleConnect(h)}
-                settings={aiSettings}
-                transport={appTransport}
-                onChangeSettings={handleUpdateAiSettings}
-                onOpenSettings={openSettings}
-                onInsertCommand={(cmd) => {
-                  if (activeTab?.sessionId) {
-                    void appTransport.writePty(activeTab.sessionId, cmd);
-                    setMobileTab('terminal');
-                  }
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Bottom 5-Tab Bar (auto-hidden when mobile keyboard opens) */}
-        {!keyboardOpen && (
-          <nav className="grid shrink-0 grid-cols-5 border-t border-white/10 bg-[#101622] pb-[env(safe-area-inset-bottom)]">
-            {(
-              [
-                { id: 'hosts', label: '主机', icon: Server },
-                { id: 'terminal', label: '终端', icon: TerminalIcon },
-                { id: 'files', label: '文件', icon: FolderTree },
-                { id: 'metrics', label: '监控', icon: Activity },
-                { id: 'ai', label: 'AI', icon: Bot },
-              ] as const
-            ).map((item) => {
-              const Icon = item.icon;
-              const active = mobileTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setMobileTab(item.id)}
-                  className={`flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] transition ${
-                    active ? 'font-semibold text-sky-400' : 'text-slate-400'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        )}
-
-        {/* Mobile Quick Commands Bottom Sheet */}
-        {mobileCommandsOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-sm">
-            <div className="flex h-[55vh] flex-col rounded-t-2xl border-t border-white/15 bg-[#0e1420]">
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5 text-xs">
-                <span className="font-semibold text-white">常用快捷命令</span>
-                <button
-                  type="button"
-                  onClick={() => setMobileCommandsOpen(false)}
-                  className="rounded p-1 text-slate-400"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="min-h-0 flex-1">
-                <SavedCommandsPane
-                  connected={activeTab?.status === 'connected'}
-                  onSendCommand={(cmd, autoExecute) => {
-                    handleSendCommand(cmd, autoExecute);
-                    setMobileCommandsOpen(false);
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+      <>
+        <MobileShell
+          isTablet={deviceMode === 'tablet'}
+          keyboardOpen={keyboardOpen}
+          activeTab={mobileTab}
+          onChangeTab={setMobileTab}
+          hosts={hosts}
+          tabs={tabs}
+          activeSessionTabId={activeTabId}
+          onSelectSessionTab={(id) => {
+            setActiveTabId(id);
+            setActiveView('terminal');
+          }}
+          onCloseSessionTab={(tabId) => {
+            const target = tabs.find((t) => t.tabId === tabId);
+            if (target) void handleCloseTab(target);
+          }}
+          metrics={metrics}
+          terminalTheme={currentTheme.theme}
+          transport={appTransport}
+          onReadyPty={setPtySize}
+          onRegisterTermContext={(tabId, handle) => {
+            termContextMapRef.current.set(tabId, handle);
+          }}
+          connectedContexts={buildConnectedContexts()}
+          aiSettings={aiSettings}
+          onChangeAiSettings={handleUpdateAiSettings}
+          onConnectHost={(h) => void handleConnect(h)}
+          onNewHost={() => {
+            setEditingHost(null);
+            setConnectModalOpen(true);
+          }}
+          onEditHost={(h) => {
+            setEditingHost(h);
+            setConnectModalOpen(true);
+          }}
+          onDuplicateHost={duplicateHost}
+          onDeleteHost={deleteHost}
+          onSendCommand={handleSendCommand}
+          uiMode={uiMode}
+          onToggleUiMode={() =>
+            setUiMode((m) => (m === 'dark' ? 'light' : 'dark'))
+          }
+          onOpenSettings={openSettings}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          cloudUser={cloudUser}
+          updateInfo={updateInfo}
+        />
 
         <SettingsModal
           open={settingsOpen}
@@ -1087,7 +846,7 @@ export function App() {
             if (connectNow) void handleConnect(h);
           }}
         />
-      </div>
+      </>
     );
   }
 
@@ -1415,17 +1174,6 @@ export function App() {
                 </div>
               )}
             </div>
-            {/* On touch tablets (>=768px), show the virtual shortcut keybar right below the terminal */}
-            {isTouch && tabs.length > 0 && (
-              <TerminalKeybar
-                disabled={activeTab?.status !== 'connected'}
-                onSendSequence={(seq) => {
-                  if (activeTab?.sessionId) {
-                    void appTransport.writePty(activeTab.sessionId, seq);
-                  }
-                }}
-              />
-            )}
           </section>
 
           {/* File Manager & Saved Commands Pane */}
