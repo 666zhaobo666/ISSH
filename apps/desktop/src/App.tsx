@@ -37,6 +37,7 @@ import { SavedCommandsPane } from './components/SavedCommandsPane';
 import { ProcessManagerPane } from './components/ProcessManagerPane';
 import { FileManagerPane } from './components/FileManagerPane';
 import { HostsManagerPane } from './components/HostsManagerPane';
+import { inferOsType } from './components/HostBadges';
 import { AiSidebar } from './components/AiSidebar';
 import { useDeviceLayout } from './hooks/useDeviceLayout';
 import { MobileShell, type MobileNavTab } from './mobile/MobileShell';
@@ -156,10 +157,14 @@ export function App() {
 
   const applyBundleToState = (bundle: IsshUserProfileBundle) => {
     suppressNextPushRef.current = true;
+    const localUiMode = localStorage.getItem(UI_MODE_STORAGE_KEY);
     importUserProfile(JSON.stringify(bundle));
+    // Keep per-device light/dark preference local so cloud sync never flips theme unexpectedly
+    if (localUiMode === 'dark' || localUiMode === 'light') {
+      localStorage.setItem(UI_MODE_STORAGE_KEY, localUiMode);
+    }
     setHosts(bundle.hosts);
     setAiSettings(bundle.aiSettings);
-    setUiMode(bundle.appearance.uiMode);
     setThemeId(bundle.appearance.terminalThemeId);
     window.setTimeout(() => {
       suppressNextPushRef.current = false;
@@ -168,11 +173,12 @@ export function App() {
 
   const runSyncCycle = async (
     interactiveOnDivergence = false,
-    userOverride?: CloudUser | null
+    userOverride?: CloudUser | null,
+    silent = false
   ) => {
     const activeUser = userOverride !== undefined ? userOverride : cloudUser;
     if (!activeUser || !getCloudToken()) return;
-    setSyncStatus('syncing');
+    if (!silent) setSyncStatus('syncing');
     try {
       const hb = await fetchSyncHeartbeat();
       if (
@@ -267,6 +273,22 @@ export function App() {
         nextThreadsVer = pulledT.maxVersion;
       }
 
+      // Push local AI chat threads only on the periodic 30s heartbeat / manual sync (not per keystroke)
+      const localT = readLocalThreads().filter((t) => (t.messages?.length ?? 0) > 0);
+      if (localT.length > 0) {
+        const pt = await pushCloudThreads(
+          localT.map((t) => ({
+            threadId: t.id,
+            deleted: false,
+            updatedAt: t.updatedAt ?? Date.now(),
+            data: t,
+          }))
+        );
+        if (pt.maxVersion > nextThreadsVer) {
+          nextThreadsVer = pt.maxVersion;
+        }
+      }
+
       const now = Date.now();
       setSyncMeta({
         userId: activeUser.id,
@@ -275,9 +297,9 @@ export function App() {
         lastSyncedAt: now,
       });
       setLastSyncedAt(now);
-      setSyncStatus('synced');
+      if (!silent) setSyncStatus('synced');
     } catch {
-      setSyncStatus('error');
+      if (!silent) setSyncStatus('error');
     }
   };
 
@@ -343,8 +365,9 @@ export function App() {
     }
   };
 
-  // Silent startup update check (server-cached GitHub Releases -> fallback direct GitHub)
+  // Silent startup update check (Desktop & Android only; Web updates are controlled by Admin)
   useEffect(() => {
+    if (!isTauriRuntime()) return;
     void checkAppUpdate(false)
       .then((res) => setUpdateInfo(res))
       .catch(() => {});
@@ -356,60 +379,45 @@ export function App() {
     fetchMe()
       .then((u) => {
         setCloudUser(u);
-        void runSyncCycle(false, u);
+        void runSyncCycle(false, u, true);
       })
       .catch(() => {
         // offline or token expired; keep local usage unrestricted
       });
   }, []);
 
-  // 30-second lightweight heartbeat sync for logged-in users
+  // 30-second silent background heartbeat sync (no UI flicker; also syncs AI threads)
   useEffect(() => {
     if (!cloudUser) return;
     const timer = window.setInterval(() => {
-      void runSyncCycle(false);
+      void runSyncCycle(false, undefined, true);
     }, 30_000);
     return () => window.clearInterval(timer);
   }, [cloudUser]);
 
-  // Debounced silent push (2.5s) when VIP user modifies hosts/AI settings/theme
+  // Immediate silent push (~300ms debounce) when VIP user modifies hosts/settings/theme (AI threads stay on 30s heartbeat)
   useEffect(() => {
     if (!cloudUser?.vipActive || suppressNextPushRef.current || conflictState) return;
     if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current);
     pushTimerRef.current = window.setTimeout(async () => {
       try {
-        setSyncStatus('syncing');
         const pushed = await pushCloudProfile(exportUserProfile(true));
-        const localT = readLocalThreads().filter((t) => (t.messages?.length ?? 0) > 0);
-        let threadsVer = getSyncMeta().threadsMaxVersion;
-        if (localT.length > 0) {
-          const pt = await pushCloudThreads(
-            localT.map((t) => ({
-              threadId: t.id,
-              deleted: false,
-              updatedAt: t.updatedAt ?? Date.now(),
-              data: t,
-            }))
-          );
-          threadsVer = pt.maxVersion;
-        }
         const now = Date.now();
         setSyncMeta({
           userId: cloudUser.id,
           profileVersion: pushed.version,
-          threadsMaxVersion: threadsVer,
+          threadsMaxVersion: getSyncMeta().threadsMaxVersion,
           lastSyncedAt: now,
         });
         setLastSyncedAt(now);
-        setSyncStatus('synced');
       } catch {
-        setSyncStatus('error');
+        // silent background retry on next heartbeat
       }
-    }, 2500);
+    }, 300);
     return () => {
       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current);
     };
-  }, [hosts, aiSettings, uiMode, themeId, cloudUser?.vipActive]);
+  }, [hosts, aiSettings, themeId, cloudUser?.vipActive]);
 
   const handleUpdateAiSettings = (next: AiSettingsState) => {
     setAiSettings(next);
@@ -692,7 +700,32 @@ export function App() {
     const poll = async () => {
       try {
         const data = await appTransport.fetchMetrics(sid);
-        if (!cancelled) setMetrics(data);
+        if (!cancelled) {
+          setMetrics(data);
+          // Auto-detect and persist OS icon onto host config when first connected
+          if (data.osName && activeTab?.host && !activeTab.host.osType) {
+            const detectedOs = inferOsType(data.osName);
+            if (detectedOs && detectedOs !== 'linux') {
+              const targetId = activeTab.host.id;
+              setHosts((prev) => {
+                const exists = prev.find((h) => h.id === targetId);
+                if (!exists || exists.osType) return prev;
+                const next = prev.map((h) =>
+                  h.id === targetId ? { ...h, osType: detectedOs } : h
+                );
+                localStorage.setItem(HOSTS_STORAGE_KEY, JSON.stringify(next));
+                return next;
+              });
+              setTabs((prev) =>
+                prev.map((t) =>
+                  t.host.id === targetId
+                    ? { ...t, host: { ...t.host, osType: detectedOs } }
+                    : t
+                )
+              );
+            }
+          }
+        }
       } catch {
         // ignore transient poll errors
       }

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { HostConfig } from '@issh/core';
 import { useDialog } from './DialogProvider';
+import { HostBadgeIcon } from './HostBadges';
 
 interface HostsManagerPaneProps {
   hosts: HostConfig[];
@@ -181,10 +182,8 @@ export function HostsManagerPane({
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400">
-                        <Server className="h-4 w-4" />
-                      </div>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <HostBadgeIcon host={h} size="md" />
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-white">
                           {h.name}

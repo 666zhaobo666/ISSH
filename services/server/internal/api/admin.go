@@ -65,6 +65,172 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
+	admin := currentUser(r)
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Nickname string `json:"nickname"`
+		VipDays  int    `json:"vipDays"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "请求参数错误")
+		return
+	}
+	email, err := ValidateEmail(req.Email)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_EMAIL", err.Error())
+		return
+	}
+	if err := ValidatePassword(req.Password); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_PASSWORD", err.Error())
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "HASH_ERROR", "密码加密失败")
+		return
+	}
+	nick := strings.TrimSpace(req.Nickname)
+	if nick == "" {
+		nick = strings.Split(email, "@")[0]
+	}
+	now := time.Now().UnixMilli()
+	var vipExp int64
+	if req.VipDays > 0 {
+		vipExp = now + int64(req.VipDays)*24*3600*1000
+	}
+	u := &store.User{
+		ID:           uuid.NewString(),
+		Email:        email,
+		PasswordHash: string(hash),
+		Nickname:     nick,
+		Role:         "user",
+		Status:       "active",
+		VipExpireAt:  vipExp,
+		TokenVersion: 1,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := s.Store().CreateUser(u); err != nil {
+		writeError(w, http.StatusConflict, "EMAIL_EXISTS", "该邮箱已存在")
+		return
+	}
+	s.logAudit("info", "admin_create_user", clientIP(r), admin.Email, "创建用户 "+email)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user": userDTO(u)})
+}
+
+func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+	admin := currentUser(r)
+	targetID := r.PathValue("id")
+	if targetID == admin.ID {
+		writeError(w, http.StatusBadRequest, "SELF_ACTION", "不能删除当前管理员账号")
+		return
+	}
+	target, err := s.Store().GetUserByID(targetID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "用户不存在")
+		return
+	}
+	if target.Role == "admin" {
+		writeError(w, http.StatusBadRequest, "FORBIDDEN", "不能删除管理员账号")
+		return
+	}
+	if target.AvatarPath != "" {
+		_ = os.Remove(filepath.Join(s.Cfg.AvatarsDir, filepath.Base(target.AvatarPath)))
+	}
+	if err := s.Store().DeleteUser(targetID); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "删除用户失败")
+		return
+	}
+	s.logAudit("warn", "admin_delete_user", clientIP(r), admin.Email, "删除用户 "+target.Email)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleAdminListLogs(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	logs, err := s.Store().ListAuditLogs(limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "读取日志失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"logs": logs})
+}
+
+func (s *Server) handleAdminClearCache(w http.ResponseWriter, r *http.Request) {
+	admin := currentUser(r)
+	nLogs, nCodes, err := s.Store().ClearLogsAndExpiredCodes()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "清理失败")
+		return
+	}
+	clearInMemoryCaches()
+	s.logAudit("info", "admin_clear_cache", clientIP(r), admin.Email, fmt.Sprintf("清理日志 %d 条、过期验证码 %d 条及内存缓存", nLogs, nCodes))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":           true,
+		"deletedLogs":  nLogs,
+		"deletedCodes": nCodes,
+	})
+}
+
+func (s *Server) handleAdminListBannedIPs(w http.ResponseWriter, r *http.Request) {
+	list, err := s.Store().ListBannedIPs()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "读取封禁列表失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ips": list})
+}
+
+func (s *Server) handleAdminBanIP(w http.ResponseWriter, r *http.Request) {
+	admin := currentUser(r)
+	var req struct {
+		IP     string `json:"ip"`
+		Reason string `json:"reason"`
+		Hours  int    `json:"hours"` // 0 = permanent
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "请求参数错误")
+		return
+	}
+	ip := strings.TrimSpace(req.IP)
+	if ip == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "请填写要封禁的 IP")
+		return
+	}
+	now := time.Now().UnixMilli()
+	var exp int64
+	if req.Hours > 0 {
+		exp = now + int64(req.Hours)*3600*1000
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		reason = "管理员手动封禁"
+	}
+	if err := s.Store().BanIP(&store.BannedIP{
+		IP:        ip,
+		Reason:    reason,
+		ExpiresAt: exp,
+		CreatedAt: now,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "封禁失败")
+		return
+	}
+	s.logAudit("security", "admin_ban_ip", clientIP(r), admin.Email, "封禁 IP "+ip+"："+reason)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleAdminUnbanIP(w http.ResponseWriter, r *http.Request) {
+	admin := currentUser(r)
+	ip := r.PathValue("ip")
+	if err := s.Store().UnbanIP(ip); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "解封失败")
+		return
+	}
+	s.logAudit("info", "admin_unban_ip", clientIP(r), admin.Email, "解封 IP "+ip)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s *Server) handleAdminUpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 	admin := currentUser(r)
 	targetID := r.PathValue("id")

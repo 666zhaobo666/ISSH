@@ -162,11 +162,124 @@ export function TerminalPane({
     };
     container.addEventListener('mouseup', onMouseUp);
 
+    // Termius-style mobile/tablet touch gestures:
+    // - 1-finger horizontal swipe: Left/Right arrow cursor control
+    // - 1-finger vertical swipe: Up/Down arrow history command switching
+    // - 2-finger vertical swipe: Scroll terminal buffer
+    // - Double-tap: Tab autocomplete & focus
+    let touchMode: 'none' | 'single' | 'scroll' = 'none';
+    let lastX = 0;
+    let lastY = 0;
+    let accumX = 0;
+    let accumY = 0;
+    let totalMoved = 0;
+    let lastTapAt = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchMode = 'single';
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+        accumX = 0;
+        accumY = 0;
+        totalMoved = 0;
+      } else if (e.touches.length === 2) {
+        touchMode = 'scroll';
+        lastY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        accumY = 0;
+      } else {
+        touchMode = 'none';
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const sid = sessionIdRef.current;
+      if (touchMode === 'scroll' && e.touches.length === 2) {
+        e.preventDefault();
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        accumY += midY - lastY;
+        lastY = midY;
+        const step = 16;
+        if (Math.abs(accumY) >= step) {
+          const lines = Math.trunc(accumY / step);
+          term.scrollLines(-lines);
+          accumY -= lines * step;
+        }
+        return;
+      }
+
+      if (touchMode === 'single' && e.touches.length === 1) {
+        const curX = e.touches[0].clientX;
+        const curY = e.touches[0].clientY;
+        const dx = curX - lastX;
+        const dy = curY - lastY;
+        lastX = curX;
+        lastY = curY;
+        totalMoved += Math.abs(dx) + Math.abs(dy);
+        accumX += dx;
+        accumY += dy;
+
+        if (!sid) return;
+        const hStep = 28;
+        const vStep = 34;
+
+        if (Math.abs(accumX) >= hStep && Math.abs(accumX) >= Math.abs(accumY)) {
+          e.preventDefault();
+          const steps = Math.trunc(accumX / hStep);
+          const seq = steps > 0 ? '\x1b[C' : '\x1b[D';
+          void transport.writePty(sid, seq.repeat(Math.abs(steps)));
+          accumX -= steps * hStep;
+          accumY = 0;
+        } else if (Math.abs(accumY) >= vStep && Math.abs(accumY) > Math.abs(accumX)) {
+          e.preventDefault();
+          const steps = Math.trunc(accumY / vStep);
+          const seq = steps < 0 ? '\x1b[A' : '\x1b[B';
+          void transport.writePty(sid, seq.repeat(Math.abs(steps)));
+          accumY -= steps * vStep;
+          accumX = 0;
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (touchMode === 'single' && totalMoved < 16 && e.changedTouches.length === 1) {
+        const now = Date.now();
+        const tx = e.changedTouches[0].clientX;
+        const ty = e.changedTouches[0].clientY;
+        if (
+          now - lastTapAt < 260 &&
+          Math.abs(tx - lastTapX) < 28 &&
+          Math.abs(ty - lastTapY) < 28
+        ) {
+          const sid = sessionIdRef.current;
+          if (sid) void transport.writePty(sid, '\t');
+          term.focus();
+          lastTapAt = 0;
+        } else {
+          lastTapAt = now;
+          lastTapX = tx;
+          lastTapY = ty;
+        }
+      }
+      if (e.touches.length === 0) {
+        touchMode = 'none';
+      }
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd, { passive: true });
+
     termRef.current = term;
     fitRef.current = fitAddon;
 
     return () => {
       container.removeEventListener('mouseup', onMouseUp);
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
       observer.disconnect();
       dataDisposable.dispose();
       term.dispose();

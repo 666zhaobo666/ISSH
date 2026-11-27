@@ -123,6 +123,26 @@ jobs:
           </resources>
           EOF
 
+          # 3. Force WindowCompat.setDecorFitsSystemWindows(window, true) in MainActivity.kt
+          MAIN_ACT=$(find src-tauri/gen/android/app/src/main/java -name "MainActivity.kt" | head -n 1)
+          if [ -n "$MAIN_ACT" ]; then
+            PKG_LINE=$(head -n 1 "$MAIN_ACT")
+            cat > "$MAIN_ACT" <<EOF
+          $PKG_LINE
+
+          import android.os.Bundle
+          import androidx.core.view.WindowCompat
+
+          class MainActivity : TauriActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+              super.onCreate(savedInstanceState)
+              WindowCompat.setDecorFitsSystemWindows(window, true)
+            }
+          }
+          EOF
+            echo "Patched $MAIN_ACT for non-edge-to-edge status bar inset"
+          fi
+
           npx tauri android build --apk --target aarch64
 
       - name: Sign & Upload Android APK to GitHub Release

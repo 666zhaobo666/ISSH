@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { HostConfig } from '@issh/core';
 import { useDialog } from '../components/DialogProvider';
+import { HostBadgeIcon } from '../components/HostBadges';
 
 interface MobileHostsViewProps {
   hosts: HostConfig[];
@@ -147,9 +148,7 @@ export function MobileHostsView({
                 className="flex min-h-[76px] cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#111827] px-4 py-3.5 shadow-sm transition active:scale-[0.98] active:border-sky-500/50 active:bg-[#162033]"
               >
                 <div className="flex min-w-0 items-center gap-3.5">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/25 to-emerald-500/20 text-sky-400">
-                    <Server className="h-5 w-5" />
-                  </div>
+                  <HostBadgeIcon host={h} size="lg" />
                   <div className="min-w-0">
                     <div className="truncate text-[15px] font-semibold text-white">
                       {h.name}

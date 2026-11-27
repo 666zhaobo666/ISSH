@@ -7,6 +7,7 @@ import {
   Crown,
   DatabaseBackup,
   Download,
+  FileText,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -16,9 +17,12 @@ import {
   Search,
   Send,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Ticket,
+  Trash2,
   Upload,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import {
@@ -27,11 +31,13 @@ import {
   setAdminToken,
   type AdminStats,
   type AdminUser,
+  type AuditLogItem,
+  type BannedIPItem,
   type SystemSettings,
   type VipTokenItem,
 } from './api';
 
-type AdminTab = 'dashboard' | 'users' | 'tokens' | 'settings' | 'backup';
+type AdminTab = 'dashboard' | 'users' | 'tokens' | 'security' | 'settings' | 'backup';
 
 function formatTime(ms: number): string {
   if (!ms) return '-';
@@ -51,13 +57,31 @@ export default function App() {
   const [tab, setTab] = useState<AdminTab>('dashboard');
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  // Dashboard
+  // Dashboard & Server Release Check
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [latestRelease, setLatestRelease] = useState<{
+    hasRelease: boolean;
+    tagName?: string;
+    notes?: string;
+  } | null>(null);
 
   // Users
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [userQuery, setUserQuery] = useState('');
   const [usersTotal, setUsersTotal] = useState(0);
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({
+    email: '',
+    password: '',
+    nickname: '',
+    vipDays: 0,
+  });
+
+  // Security, Logs & Banned IPs
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [bannedIps, setBannedIps] = useState<BannedIPItem[]>([]);
+  const [banIpInput, setBanIpInput] = useState('');
+  const [banReasonInput, setBanReasonInput] = useState('');
 
   // Tokens
   const [tokens, setTokens] = useState<VipTokenItem[]>([]);
@@ -106,6 +130,19 @@ export default function App() {
     }
   };
 
+  const loadSecurity = async () => {
+    try {
+      const [logsRes, ipsRes] = await Promise.all([
+        apiRequest<{ logs: AuditLogItem[] }>('/api/admin/logs?limit=150'),
+        apiRequest<{ ips: BannedIPItem[] }>('/api/admin/banned-ips'),
+      ]);
+      setAuditLogs(logsRes.logs ?? []);
+      setBannedIps(ipsRes.ips ?? []);
+    } catch (e) {
+      showToast('err', String(e));
+    }
+  };
+
   const loadUsers = async (q = userQuery) => {
     try {
       const res = await apiRequest<{ total: number; users: AdminUser[] }>(
@@ -140,9 +177,15 @@ export default function App() {
 
   useEffect(() => {
     if (!authedUser) return;
-    if (tab === 'dashboard') void loadStats();
+    if (tab === 'dashboard') {
+      void loadStats();
+      apiRequest<{ hasRelease: boolean; tagName?: string; notes?: string }>('/api/app/latest')
+        .then(setLatestRelease)
+        .catch(() => {});
+    }
     if (tab === 'users') void loadUsers();
     if (tab === 'tokens') void loadTokens();
+    if (tab === 'security') void loadSecurity();
     if (tab === 'settings') void loadSettings();
   }, [authedUser, tab]);
 
@@ -389,6 +432,7 @@ export default function App() {
               { id: 'dashboard', label: '概览仪表盘', icon: LayoutDashboard },
               { id: 'users', label: '用户与 VIP 管理', icon: Users },
               { id: 'tokens', label: 'VIP 卡密管理', icon: Ticket },
+              { id: 'security', label: '安全防护与日志', icon: ShieldAlert },
               { id: 'settings', label: '系统与 SMTP 设置', icon: Settings },
               { id: 'backup', label: '全量备份与恢复', icon: DatabaseBackup },
             ] as const
@@ -445,7 +489,7 @@ export default function App() {
                 { label: '注册用户总数', val: stats?.totalUsers ?? 0, color: 'text-sky-400' },
                 { label: '有效 VIP 用户', val: stats?.activeVipUsers ?? 0, color: 'text-amber-400' },
                 { label: '未使用卡密', val: stats?.unusedTokens ?? 0, color: 'text-emerald-400' },
-                { label: '已同步配置 / 对话', val: `${stats?.syncedProfiles ?? 0} / ${stats?.syncedThreads ?? 0}`, color: 'text-violet-400' },
+                { label: '已封禁 IP / 审计日志', val: `${stats?.bannedIpCount ?? 0} / ${stats?.auditLogCount ?? 0}`, color: 'text-rose-400' },
               ].map((card) => (
                 <div
                   key={card.label}
@@ -457,6 +501,32 @@ export default function App() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Server & Web Version Update Control (Admin-only) */}
+            <div className="rounded-xl border border-white/10 bg-[#101622] p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-white">服务端与 Web 端版本更新管理</div>
+                <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 font-mono text-[11px] text-sky-300">
+                  最新 Release：{latestRelease?.hasRelease ? latestRelease.tagName : '检测中...'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Web 端随服务端容器统一发布，用户端不再展示更新按钮。在 VPS 项目目录执行以下命令即可一键无损更新服务端与 Web 端：
+              </p>
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#090d14] px-3 py-2 font-mono text-[11px] text-emerald-300">
+                <code>git pull && docker compose up -d --build</code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText('git pull && docker compose up -d --build');
+                    showToast('ok', '已复制更新命令');
+                  }}
+                  className="flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-slate-200 hover:bg-white/20"
+                >
+                  <Copy className="h-3 w-3" /> 复制
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -490,8 +560,74 @@ export default function App() {
                 >
                   搜索
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateUserOpen((v) => !v)}
+                  className="flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 font-medium text-emerald-300 hover:bg-emerald-500/25"
+                >
+                  <UserPlus className="h-3.5 w-3.5" /> 添加用户
+                </button>
               </form>
             </div>
+
+            {createUserOpen && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await apiRequest('/api/admin/users', {
+                      method: 'POST',
+                      body: JSON.stringify(newUserForm),
+                    });
+                    showToast('ok', `已创建用户 ${newUserForm.email}`);
+                    setNewUserForm({ email: '', password: '', nickname: '', vipDays: 0 });
+                    setCreateUserOpen(false);
+                    void loadUsers();
+                  } catch (err) {
+                    showToast('err', err instanceof Error ? err.message : String(err));
+                  }
+                }}
+                className="flex flex-wrap items-end gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5"
+              >
+                <input
+                  type="email"
+                  required
+                  value={newUserForm.email}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                  placeholder="邮箱"
+                  className="w-48 rounded-lg border border-white/10 bg-[#090d14] px-2.5 py-1.5 text-slate-200 outline-none focus:border-sky-500"
+                />
+                <input
+                  type="password"
+                  required
+                  value={newUserForm.password}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                  placeholder="初始密码 (≥6位)"
+                  className="w-40 rounded-lg border border-white/10 bg-[#090d14] px-2.5 py-1.5 text-slate-200 outline-none focus:border-sky-500"
+                />
+                <input
+                  value={newUserForm.nickname}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, nickname: e.target.value })}
+                  placeholder="昵称 (可选)"
+                  className="w-32 rounded-lg border border-white/10 bg-[#090d14] px-2.5 py-1.5 text-slate-200 outline-none focus:border-sky-500"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={newUserForm.vipDays}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, vipDays: Number(e.target.value) })}
+                  placeholder="赠送VIP天数"
+                  className="w-28 rounded-lg border border-white/10 bg-[#090d14] px-2.5 py-1.5 text-slate-200 outline-none focus:border-sky-500"
+                  title="赠送 VIP 天数（0 为普通用户）"
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-emerald-500 px-3.5 py-1.5 font-medium text-white hover:bg-emerald-400"
+                >
+                  确认创建
+                </button>
+              </form>
+            )}
 
             <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#101622]">
               <table className="w-full text-left">
@@ -582,18 +718,37 @@ export default function App() {
                             </button>
                           )}
                           {u.role !== 'admin' && (
-                            <button
-                              type="button"
-                              onClick={() => void handleToggleUserStatus(u)}
-                              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] ${
-                                u.status === 'active'
-                                  ? 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25'
-                                  : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
-                              }`}
-                            >
-                              <Ban className="h-3 w-3" />
-                              {u.status === 'active' ? '禁用' : '启用'}
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void handleToggleUserStatus(u)}
+                                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] ${
+                                  u.status === 'active'
+                                    ? 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25'
+                                    : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                                }`}
+                              >
+                                <Ban className="h-3 w-3" />
+                                {u.status === 'active' ? '封禁' : '解封'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!window.confirm(`确定永久删除用户 ${u.email} 及其所有云端数据吗？`)) return;
+                                  try {
+                                    await apiRequest(`/api/admin/users/${u.id}`, { method: 'DELETE' });
+                                    showToast('ok', `已删除用户 ${u.email}`);
+                                    void loadUsers();
+                                  } catch (err) {
+                                    showToast('err', err instanceof Error ? err.message : String(err));
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 rounded border border-rose-500/30 px-2 py-1 text-[11px] text-rose-400 hover:bg-rose-500/20"
+                                title="永久删除用户"
+                              >
+                                <Trash2 className="h-3 w-3" /> 删除
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -779,6 +934,165 @@ export default function App() {
                           )}
                         </div>
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3.5: SECURITY, IP BAN & AUDIT LOGS */}
+        {tab === 'security' && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-white">安全防护、IP 封禁与系统日志</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void loadSecurity()}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-slate-300 hover:bg-white/10"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" /> 刷新
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await apiRequest<{ deletedLogs: number; deletedCodes: number }>(
+                        '/api/admin/cache/clear',
+                        { method: 'POST' }
+                      );
+                      showToast(
+                        'ok',
+                        `清理完成：已清除 ${res.deletedLogs} 条日志、${res.deletedCodes} 条过期验证码及内存缓存`
+                      );
+                      void loadSecurity();
+                    } catch (err) {
+                      showToast('err', err instanceof Error ? err.message : String(err));
+                    }
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 font-medium text-amber-300 hover:bg-amber-500/25"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> 一键清理日志与缓存
+                </button>
+              </div>
+            </div>
+
+            {/* Banned IPs */}
+            <div className="rounded-xl border border-white/10 bg-[#101622] p-4 space-y-3">
+              <div className="font-medium text-white">
+                IP 封禁列表（系统自动拦截 10 分钟内高频注册/爆破 IP，也支持手动封禁）
+              </div>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!banIpInput.trim()) return;
+                  try {
+                    await apiRequest('/api/admin/banned-ips', {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        ip: banIpInput.trim(),
+                        reason: banReasonInput.trim() || '管理员手动封禁',
+                        hours: 0,
+                      }),
+                    });
+                    setBanIpInput('');
+                    setBanReasonInput('');
+                    showToast('ok', '已封禁 IP');
+                    void loadSecurity();
+                  } catch (err) {
+                    showToast('err', err instanceof Error ? err.message : String(err));
+                  }
+                }}
+                className="flex flex-wrap gap-2"
+              >
+                <input
+                  value={banIpInput}
+                  onChange={(e) => setBanIpInput(e.target.value)}
+                  placeholder="输入要封禁的 IP（如 1.2.3.4）"
+                  className="w-52 rounded-lg border border-white/10 bg-[#090d14] px-3 py-1.5 font-mono text-slate-200 outline-none focus:border-sky-500"
+                />
+                <input
+                  value={banReasonInput}
+                  onChange={(e) => setBanReasonInput(e.target.value)}
+                  placeholder="封禁原因（可选）"
+                  className="flex-1 rounded-lg border border-white/10 bg-[#090d14] px-3 py-1.5 text-slate-200 outline-none focus:border-sky-500"
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-rose-500 px-3.5 py-1.5 font-medium text-white hover:bg-rose-400"
+                >
+                  封禁 IP
+                </button>
+              </form>
+
+              {bannedIps.length === 0 ? (
+                <div className="text-[11px] text-slate-500">当前无封禁 IP</div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {bannedIps.map((b) => (
+                    <div key={b.ip} className="flex items-center justify-between py-2">
+                      <div>
+                        <span className="font-mono font-semibold text-rose-300">{b.ip}</span>
+                        <span className="ml-2 text-slate-400">{b.reason}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await apiRequest(`/api/admin/banned-ips/${encodeURIComponent(b.ip)}`, {
+                            method: 'DELETE',
+                          });
+                          showToast('ok', `已解封 ${b.ip}`);
+                          void loadSecurity();
+                        }}
+                        className="rounded border border-white/10 px-2.5 py-0.5 text-[11px] text-slate-300 hover:bg-white/10"
+                      >
+                        解封
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Audit Logs */}
+            <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#101622]">
+              <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5 font-medium text-white">
+                <FileText className="h-4 w-4 text-sky-400" /> 最近系统与安全日志 ({auditLogs.length})
+              </div>
+              <table className="w-full text-left">
+                <thead className="border-b border-white/10 bg-white/[0.02] text-slate-400">
+                  <tr>
+                    <th className="px-4 py-2">时间</th>
+                    <th className="px-4 py-2">级别</th>
+                    <th className="px-4 py-2">事件</th>
+                    <th className="px-4 py-2">IP</th>
+                    <th className="px-4 py-2">操作者</th>
+                    <th className="px-4 py-2">详情</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 font-mono text-[11px]">
+                  {auditLogs.map((l) => (
+                    <tr key={l.id} className="hover:bg-white/[0.02]">
+                      <td className="px-4 py-2 text-slate-400">{formatTime(l.createdAt)}</td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] ${
+                            l.level === 'security'
+                              ? 'bg-rose-500/20 text-rose-300'
+                              : l.level === 'warn'
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-sky-500/15 text-sky-300'
+                          }`}
+                        >
+                          {l.level}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-slate-200">{l.action}</td>
+                      <td className="px-4 py-2 text-slate-400">{l.ip || '-'}</td>
+                      <td className="px-4 py-2 text-slate-300">{l.actor || '-'}</td>
+                      <td className="px-4 py-2 font-sans text-slate-300">{l.detail}</td>
                     </tr>
                   ))}
                 </tbody>

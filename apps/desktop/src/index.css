@@ -39,6 +39,11 @@ html.light .bg-\[\#111827\] {
   background-color: #f8fafc !important;
 }
 
+html.light .bg-\[\#141c2b\] {
+  background-color: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
 html.light .bg-white\/5,
 html.light .bg-white\/\[0\.02\],
 html.light .bg-white\/\[0\.03\],

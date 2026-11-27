@@ -59,6 +59,23 @@ type SyncThread struct {
 	UpdatedAt        int64
 }
 
+type AuditLog struct {
+	ID        string `json:"id"`
+	Level     string `json:"level"` // "info" | "warn" | "security"
+	Action    string `json:"action"`
+	IP        string `json:"ip"`
+	Actor     string `json:"actor"`
+	Detail    string `json:"detail"`
+	CreatedAt int64  `json:"createdAt"`
+}
+
+type BannedIP struct {
+	IP        string `json:"ip"`
+	Reason    string `json:"reason"`
+	ExpiresAt int64  `json:"expiresAt"` // 0 = permanent
+	CreatedAt int64  `json:"createdAt"`
+}
+
 type AdminStats struct {
 	TotalUsers      int64 `json:"totalUsers"`
 	ActiveVipUsers  int64 `json:"activeVipUsers"`
@@ -67,6 +84,8 @@ type AdminStats struct {
 	RedeemedTokens  int64 `json:"redeemedTokens"`
 	SyncedProfiles  int64 `json:"syncedProfiles"`
 	SyncedThreads   int64 `json:"syncedThreads"`
+	AuditLogCount   int64 `json:"auditLogCount"`
+	BannedIPCount   int64 `json:"bannedIpCount"`
 }
 
 // Store abstracts persistence so SQLite can be swapped for PostgreSQL/MySQL later.
@@ -83,7 +102,17 @@ type Store interface {
 	UpdateUserPassword(id, passwordHash string) error
 	UpdateUserStatus(id, status string) error
 	UpdateUserVip(id string, vipExpireAt int64) error
+	DeleteUser(id string) error
 	CountAdmins() (int64, error)
+
+	// Security: Audit Logs & Banned IPs
+	AddAuditLog(entry *AuditLog) error
+	ListAuditLogs(limit int) ([]*AuditLog, error)
+	ClearLogsAndExpiredCodes() (deletedLogs int64, deletedCodes int64, err error)
+	BanIP(b *BannedIP) error
+	UnbanIP(ip string) error
+	IsIPBanned(ip string, nowMs int64) (*BannedIP, error)
+	ListBannedIPs() ([]*BannedIP, error)
 
 	// Email verification codes
 	SaveEmailCode(c *EmailCode) error

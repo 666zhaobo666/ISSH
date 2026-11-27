@@ -103,6 +103,22 @@ func (s *SQLiteStore) migrate() error {
 			value TEXT NOT NULL,
 			updated_at INTEGER NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS audit_logs (
+			id TEXT PRIMARY KEY,
+			level TEXT NOT NULL,
+			action TEXT NOT NULL,
+			ip TEXT NOT NULL DEFAULT '',
+			actor TEXT NOT NULL DEFAULT '',
+			detail TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_time ON audit_logs(created_at DESC);`,
+		`CREATE TABLE IF NOT EXISTS banned_ips (
+			ip TEXT PRIMARY KEY,
+			reason TEXT NOT NULL DEFAULT '',
+			expires_at INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL
+		);`,
 	}
 	for _, st := range stmts {
 		if _, err := s.db.Exec(st); err != nil {
@@ -233,6 +249,118 @@ func (s *SQLiteStore) UpdateUserVip(id string, vipExpireAt int64) error {
 		vipExpireAt, now, id,
 	)
 	return err
+}
+
+func (s *SQLiteStore) DeleteUser(id string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, _ = tx.Exec(`DELETE FROM user_sync_profiles WHERE user_id = ?`, id)
+	_, _ = tx.Exec(`DELETE FROM user_sync_threads WHERE user_id = ?`, id)
+	if _, err := tx.Exec(`DELETE FROM users WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *SQLiteStore) AddAuditLog(entry *AuditLog) error {
+	_, err := s.db.Exec(
+		`INSERT INTO audit_logs (id, level, action, ip, actor, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		entry.ID, entry.Level, entry.Action, entry.IP, entry.Actor, entry.Detail, entry.CreatedAt,
+	)
+	return err
+}
+
+func (s *SQLiteStore) ListAuditLogs(limit int) ([]*AuditLog, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.db.Query(
+		`SELECT id, level, action, ip, actor, detail, created_at FROM audit_logs ORDER BY created_at DESC LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*AuditLog{}
+	for rows.Next() {
+		a := &AuditLog{}
+		if err := rows.Scan(&a.ID, &a.Level, &a.Action, &a.IP, &a.Actor, &a.Detail, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, nil
+}
+
+func (s *SQLiteStore) ClearLogsAndExpiredCodes() (int64, int64, error) {
+	res1, err := s.db.Exec(`DELETE FROM audit_logs`)
+	if err != nil {
+		return 0, 0, err
+	}
+	n1, _ := res1.RowsAffected()
+	now := time.Now().UnixMilli()
+	res2, err := s.db.Exec(`DELETE FROM email_codes WHERE expires_at < ? OR used = 1`, now)
+	if err != nil {
+		return n1, 0, err
+	}
+	n2, _ := res2.RowsAffected()
+	return n1, n2, nil
+}
+
+func (s *SQLiteStore) BanIP(b *BannedIP) error {
+	_, err := s.db.Exec(
+		`INSERT INTO banned_ips (ip, reason, expires_at, created_at) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(ip) DO UPDATE SET reason = excluded.reason, expires_at = excluded.expires_at, created_at = excluded.created_at`,
+		b.IP, b.Reason, b.ExpiresAt, b.CreatedAt,
+	)
+	return err
+}
+
+func (s *SQLiteStore) UnbanIP(ip string) error {
+	_, err := s.db.Exec(`DELETE FROM banned_ips WHERE ip = ?`, ip)
+	return err
+}
+
+func (s *SQLiteStore) IsIPBanned(ip string, nowMs int64) (*BannedIP, error) {
+	b := &BannedIP{}
+	err := s.db.QueryRow(
+		`SELECT ip, reason, expires_at, created_at FROM banned_ips WHERE ip = ?`, ip,
+	).Scan(&b.IP, &b.Reason, &b.ExpiresAt, &b.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if b.ExpiresAt > 0 && b.ExpiresAt < nowMs {
+		_ = s.UnbanIP(ip)
+		return nil, nil
+	}
+	return b, nil
+}
+
+func (s *SQLiteStore) ListBannedIPs() ([]*BannedIP, error) {
+	rows, err := s.db.Query(`SELECT ip, reason, expires_at, created_at FROM banned_ips ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*BannedIP{}
+	now := time.Now().UnixMilli()
+	for rows.Next() {
+		b := &BannedIP{}
+		if err := rows.Scan(&b.IP, &b.Reason, &b.ExpiresAt, &b.CreatedAt); err != nil {
+			return nil, err
+		}
+		if b.ExpiresAt == 0 || b.ExpiresAt >= now {
+			out = append(out, b)
+		}
+	}
+	return out, nil
 }
 
 func (s *SQLiteStore) CountAdmins() (int64, error) {
@@ -560,5 +688,7 @@ func (s *SQLiteStore) GetAdminStats() (*AdminStats, error) {
 	_ = s.db.QueryRow(`SELECT COUNT(*) FROM vip_tokens WHERE status = 'redeemed'`).Scan(&st.RedeemedTokens)
 	_ = s.db.QueryRow(`SELECT COUNT(*) FROM user_sync_profiles`).Scan(&st.SyncedProfiles)
 	_ = s.db.QueryRow(`SELECT COUNT(*) FROM user_sync_threads WHERE deleted = 0`).Scan(&st.SyncedThreads)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM audit_logs`).Scan(&st.AuditLogCount)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM banned_ips`).Scan(&st.BannedIPCount)
 	return st, nil
 }

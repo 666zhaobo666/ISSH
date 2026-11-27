@@ -4,6 +4,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { isTauriRuntime } from '../transport/runtime';
 import { FileKey2, KeyRound, Lock, Plus, Save, Upload, X } from 'lucide-react';
 import type { AuthMethod, HostConfig } from '@issh/core';
+import { COUNTRY_OPTIONS, OS_OPTIONS } from './HostBadges';
 
 interface ConnectModalProps {
   open: boolean;
@@ -23,6 +24,8 @@ export function ConnectModal({
   const [name, setName] = useState('');
   const [group, setGroup] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const [osType, setOsType] = useState('');
+  const [countryCode, setCountryCode] = useState('');
   const [host, setHost] = useState('');
   const [port, setPort] = useState('22');
   const [username, setUsername] = useState('root');
@@ -82,6 +85,8 @@ export function ConnectModal({
       setName(editingHost.name);
       setGroup(editingHost.group ?? '');
       setTagsInput((editingHost.tags ?? []).join(', '));
+      setOsType(editingHost.osType ?? '');
+      setCountryCode(editingHost.countryCode ?? '');
       setHost(editingHost.host);
       setPort(String(editingHost.port));
       setUsername(editingHost.username);
@@ -100,6 +105,8 @@ export function ConnectModal({
       setName('');
       setGroup('');
       setTagsInput('');
+      setOsType('');
+      setCountryCode('');
       setHost('');
       setPort('22');
       setUsername('root');
@@ -135,6 +142,8 @@ export function ConnectModal({
       name: name.trim() || `${username}@${host}`,
       group: group.trim() || undefined,
       tags: tags.length > 0 ? Array.from(new Set(tags)) : undefined,
+      osType: osType || undefined,
+      countryCode: countryCode || undefined,
       host: host.trim(),
       port: Number(port) || 22,
       username: username.trim(),
@@ -212,6 +221,39 @@ export function ConnectModal({
               placeholder="例如：Debian, Docker, 重要"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-slate-200 outline-none focus:border-sky-500"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="mb-1 block text-slate-400">操作系统图标</label>
+              <select
+                value={osType}
+                onChange={(e) => setOsType(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-[#0b0f17] px-2.5 py-2 text-slate-200 outline-none focus:border-sky-500"
+              >
+                <option value="">自动识别</option>
+                {OS_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-slate-400">地区 / 国家旗帜</label>
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-[#0b0f17] px-2.5 py-2 text-slate-200 outline-none focus:border-sky-500"
+              >
+                <option value="">自动识别</option>
+                {COUNTRY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2">

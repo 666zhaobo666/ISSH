@@ -67,6 +67,14 @@ func userDTO(u *store.User) map[string]any {
 }
 
 func (s *Server) handleSendCode(w http.ResponseWriter, r *http.Request) {
+	if s.checkIPBanned(w, r) {
+		return
+	}
+	ip := clientIP(r)
+	if s.recordAndCheckAbuse(regBuckets, ip, "发信验证码", 8) {
+		writeError(w, http.StatusForbidden, "IP_BANNED", "请求过于频繁，当前 IP 已被临时封禁")
+		return
+	}
 	var req struct {
 		Email   string `json:"email"`
 		Purpose string `json:"purpose"` // "register" | "reset_pwd"
@@ -152,6 +160,14 @@ func (s *Server) handleSendCode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if s.checkIPBanned(w, r) {
+		return
+	}
+	ip := clientIP(r)
+	if s.recordAndCheckAbuse(regBuckets, ip, "注册", 5) {
+		writeError(w, http.StatusForbidden, "IP_BANNED", "短时间内注册次数过多，当前 IP 已被封禁")
+		return
+	}
 	if regEnabled, _, _ := s.Store().GetSetting("registration_enabled"); regEnabled == "false" {
 		writeError(w, http.StatusForbidden, "REGISTRATION_DISABLED", "管理员已关闭新用户注册")
 		return
@@ -230,6 +246,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if s.checkIPBanned(w, r) {
+		return
+	}
+	ip := clientIP(r)
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -253,9 +273,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
+		s.recordAndCheckAbuse(failBuckets, ip, "登录失败", 15)
+		s.logAudit("warn", "login_failed", ip, email, "密码错误")
 		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "邮箱或密码错误")
 		return
 	}
+	s.logAudit("info", "login_success", ip, email, "登录成功")
 	token, err := s.IssueToken(u)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "JWT_ERROR", "签发登录令牌失败")

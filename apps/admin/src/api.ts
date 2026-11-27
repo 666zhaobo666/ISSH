@@ -44,6 +44,25 @@ export interface AdminStats {
   redeemedTokens: number;
   syncedProfiles: number;
   syncedThreads: number;
+  auditLogCount?: number;
+  bannedIpCount?: number;
+}
+
+export interface AuditLogItem {
+  id: string;
+  level: 'info' | 'warn' | 'security';
+  action: string;
+  ip: string;
+  actor: string;
+  detail: string;
+  createdAt: number;
+}
+
+export interface BannedIPItem {
+  ip: string;
+  reason: string;
+  expiresAt: number;
+  createdAt: number;
 }
 
 export interface AdminUser {

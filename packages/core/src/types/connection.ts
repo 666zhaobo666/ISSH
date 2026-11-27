@@ -16,6 +16,10 @@ export interface HostConfig {
   jumpHostId?: string;
   /** Enable OSC 7 shell hook injection for accurate directory tracking */
   enableOsc7Hook?: boolean;
+  /** Detected or user-chosen OS type (e.g. debian, ubuntu, centos, alpine, arch, rocky, linux) */
+  osType?: string;
+  /** ISO 2-letter country/region code (e.g. US, HK, JP, SG, CN, DE) */
+  countryCode?: string;
   createdAt: number;
   updatedAt: number;
 }

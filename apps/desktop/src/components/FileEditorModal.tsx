@@ -232,56 +232,57 @@ export function FileEditorModal({
   }, [langInfo.isMarkdown, content]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
-      <div className="flex h-[85vh] w-[88vw] max-w-6xl flex-col overflow-hidden rounded-xl border border-white/15 bg-[#0e1420] shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm md:p-6">
+      <div className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#0e1420] shadow-2xl md:h-[85vh] md:w-[88vw] md:max-w-6xl md:rounded-xl md:border md:border-white/15">
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-white/10 bg-[#101622] px-4 py-2.5 text-xs">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#101622] px-3 py-2.5 text-xs md:px-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {isBinary ? (
               <Binary className="h-4 w-4 shrink-0 text-amber-400" />
             ) : (
               <FileCode2 className="h-4 w-4 shrink-0 text-sky-400" />
             )}
-            <span className="truncate font-mono font-semibold text-white">
-              {file.path}
+            <span className="truncate font-mono font-semibold text-white" title={file.path}>
+              <span className="md:hidden">{filename}</span>
+              <span className="hidden md:inline">{file.path}</span>
             </span>
-            {dirty && <span className="text-amber-400">● 未保存</span>}
-            <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">
+            {dirty && <span className="shrink-0 text-amber-400">●</span>}
+            <span className="hidden shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300 sm:inline">
               {isBinary ? 'HEX' : langInfo.label}
             </span>
-            <span className="font-mono text-[10px] text-slate-500">
+            <span className="hidden shrink-0 font-mono text-[10px] text-slate-500 md:inline">
               0{file.permissions.toString(8)}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            {error && <span className="text-rose-400">{error}</span>}
+          <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
+            {error && <span className="max-w-[120px] truncate text-rose-400 sm:max-w-none">{error}</span>}
             {savedNotice && (
-              <span className="flex items-center gap-1 text-emerald-400">
+              <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-400">
                 <Check className="h-3.5 w-3.5" /> 已保存
               </span>
             )}
 
             {langInfo.isMarkdown && !isBinary && (
-              <div className="flex rounded-md border border-white/10 bg-white/5 p-0.5 text-[11px]">
+              <div className="flex shrink-0 rounded-md border border-white/10 bg-white/5 p-0.5 text-[11px]">
                 <button
                   type="button"
                   onClick={() => setMdMode('edit')}
-                  className={`rounded px-2 py-0.5 ${mdMode === 'edit' ? 'bg-sky-500/25 text-sky-300' : 'text-slate-400'}`}
+                  className={`whitespace-nowrap rounded px-2 py-0.5 ${mdMode === 'edit' ? 'bg-sky-500/25 text-sky-300' : 'text-slate-400'}`}
                 >
                   源码
                 </button>
                 <button
                   type="button"
                   onClick={() => setMdMode('split')}
-                  className={`flex items-center gap-1 rounded px-2 py-0.5 ${mdMode === 'split' ? 'bg-sky-500/25 text-sky-300' : 'text-slate-400'}`}
+                  className={`hidden items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 md:flex ${mdMode === 'split' ? 'bg-sky-500/25 text-sky-300' : 'text-slate-400'}`}
                 >
                   <Columns2 className="h-3 w-3" /> 分栏
                 </button>
                 <button
                   type="button"
                   onClick={() => setMdMode('preview')}
-                  className={`flex items-center gap-1 rounded px-2 py-0.5 ${mdMode === 'preview' ? 'bg-sky-500/25 text-sky-300' : 'text-slate-400'}`}
+                  className={`flex items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 ${mdMode === 'preview' ? 'bg-sky-500/25 text-sky-300' : 'text-slate-400'}`}
                 >
                   <Eye className="h-3 w-3" /> 预览
                 </button>
@@ -293,10 +294,11 @@ export function FileEditorModal({
                 type="button"
                 disabled={saving}
                 onClick={() => void handleSave()}
-                className="flex items-center gap-1.5 rounded-md bg-sky-500 px-3 py-1.5 font-medium text-white transition hover:bg-sky-400 disabled:opacity-50"
+                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-sky-500 px-3 py-1.5 font-medium text-white transition hover:bg-sky-400 disabled:opacity-50"
               >
-                <Save className="h-3.5 w-3.5" />
-                <span>{saving ? '保存中...' : '保存 (Ctrl+S)'}</span>
+                <Save className="h-3.5 w-3.5 shrink-0" />
+                <span>{saving ? '保存中...' : '保存'}</span>
+                <span className="hidden sm:inline">(Ctrl+S)</span>
               </button>
             )}
 
@@ -316,7 +318,7 @@ export function FileEditorModal({
                   if (ok) onClose();
                 });
               }}
-              className="rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+              className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>

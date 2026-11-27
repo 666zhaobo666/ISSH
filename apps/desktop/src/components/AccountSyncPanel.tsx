@@ -7,6 +7,7 @@ import {
   Crown,
   KeyRound,
   LogOut,
+  Pencil,
   RefreshCw,
   Ticket,
 } from 'lucide-react';
@@ -170,23 +171,28 @@ export function AccountSyncPanel({
 
       {/* User Identity Card */}
       <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3.5">
             <button
               type="button"
               onClick={() => avatarInputRef.current?.click()}
-              className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-white/15 bg-sky-500/20"
+              className="group relative h-12 w-12 shrink-0 rounded-full border border-white/15 bg-sky-500/20"
               title="点击更换头像（自动压缩为 256×256）"
             >
-              {avatarSrc ? (
-                <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center text-base font-semibold text-sky-300">
-                  {(user.nickname || user.email)[0]?.toUpperCase()}
-                </span>
-              )}
-              <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition group-hover:opacity-100">
+              <span className="block h-full w-full overflow-hidden rounded-full">
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-base font-semibold text-sky-300">
+                    {(user.nickname || user.email)[0]?.toUpperCase()}
+                  </span>
+                )}
+              </span>
+              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 opacity-0 transition group-hover:opacity-100">
                 <Camera className="h-4 w-4 text-white" />
+              </span>
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-[#0e1420] bg-sky-500 text-white shadow">
+                <Pencil className="h-2.5 w-2.5" />
               </span>
             </button>
             <input
@@ -200,13 +206,17 @@ export function AccountSyncPanel({
               }}
             />
 
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <input
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  className="w-36 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-semibold text-white outline-none hover:border-white/10 focus:border-sky-500 focus:bg-[#090d14]"
-                />
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-0.5 focus-within:border-sky-500 focus-within:bg-[#090d14]">
+                  <input
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    title="点击编辑昵称"
+                    className="w-28 bg-transparent text-sm font-semibold text-white outline-none sm:w-32"
+                  />
+                  <Pencil className="h-3 w-3 shrink-0 text-slate-400" />
+                </div>
                 {nickDirty && (
                   <button
                     type="button"
@@ -228,7 +238,7 @@ export function AccountSyncPanel({
                   </span>
                 )}
               </div>
-              <div className="px-1.5 text-[11px] text-slate-400">{user.email}</div>
+              <div className="px-0.5 text-[11px] text-slate-400">{user.email}</div>
             </div>
           </div>
 
@@ -316,17 +326,13 @@ export function AccountSyncPanel({
           )}
           <div>
             <div className="font-medium text-slate-200">
-              {user.vipActive
-                ? syncStatus === 'syncing'
-                  ? '正在执行无感云同步...'
-                  : '无感心跳同步已开启（每 30 秒自动检查）'
-                : '云端同步已暂停（仅 VIP 可用）'}
+              {user.vipActive ? '同步功能已开启' : '云端同步已暂停（仅 VIP 可用）'}
             </div>
             <div className="text-[11px] text-slate-400">
               {user.vipActive
                 ? lastSyncedAt > 0
                   ? `上次同步：${new Date(lastSyncedAt).toLocaleTimeString()}`
-                  : '变更后自动推送，支持主机、AI 服务商、Skills 与对话历史'
+                  : '配置变更即时同步，后台自动静默保活'
                 : '云端数据已安全保留不删除，激活 VIP 后可选择云端/本地/智能合并恢复'}
             </div>
           </div>

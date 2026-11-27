@@ -167,6 +167,8 @@ func (s *Server) Handler() http.Handler {
 	// Admin APIs
 	mux.HandleFunc("GET /api/admin/stats", s.withAuth(s.handleAdminStats, true))
 	mux.HandleFunc("GET /api/admin/users", s.withAuth(s.handleAdminListUsers, true))
+	mux.HandleFunc("POST /api/admin/users", s.withAuth(s.handleAdminCreateUser, true))
+	mux.HandleFunc("DELETE /api/admin/users/{id}", s.withAuth(s.handleAdminDeleteUser, true))
 	mux.HandleFunc("PUT /api/admin/users/{id}/status", s.withAuth(s.handleAdminUpdateUserStatus, true))
 	mux.HandleFunc("PUT /api/admin/users/{id}/vip", s.withAuth(s.handleAdminUpdateUserVip, true))
 	mux.HandleFunc("PUT /api/admin/users/{id}/password", s.withAuth(s.handleAdminResetUserPassword, true))
@@ -178,6 +180,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/settings/test-smtp", s.withAuth(s.handleAdminTestSMTP, true))
 	mux.HandleFunc("GET /api/admin/backup/export", s.withAuth(s.handleAdminExportBackup, true))
 	mux.HandleFunc("POST /api/admin/backup/restore", s.withAuth(s.handleAdminRestoreBackup, true))
+	mux.HandleFunc("GET /api/admin/logs", s.withAuth(s.handleAdminListLogs, true))
+	mux.HandleFunc("POST /api/admin/cache/clear", s.withAuth(s.handleAdminClearCache, true))
+	mux.HandleFunc("GET /api/admin/banned-ips", s.withAuth(s.handleAdminListBannedIPs, true))
+	mux.HandleFunc("POST /api/admin/banned-ips", s.withAuth(s.handleAdminBanIP, true))
+	mux.HandleFunc("DELETE /api/admin/banned-ips/{ip}", s.withAuth(s.handleAdminUnbanIP, true))
 
 	// Avatar static serving
 	mux.HandleFunc("GET /avatars/", func(w http.ResponseWriter, r *http.Request) {

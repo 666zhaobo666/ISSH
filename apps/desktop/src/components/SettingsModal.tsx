@@ -4,6 +4,8 @@ import {
   Activity,
   Bot,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Cloud,
   Columns2,
   Download,
@@ -48,6 +50,7 @@ import {
   type UpdateCheckResult,
 } from '../utils/appVersion';
 import { isTauriRuntime } from '../transport/runtime';
+import { useDeviceLayout } from '../hooks/useDeviceLayout';
 
 export type SettingsTab =
   | 'providers'
@@ -106,7 +109,16 @@ export function SettingsModal({
   onUpdateChecked,
   onClose,
 }: SettingsModalProps) {
+  const { mode: deviceMode } = useDeviceLayout();
+  const isPhone = deviceMode === 'phone';
+  const isWeb = !isTauriRuntime();
+  const isAndroid =
+    isTauriRuntime() &&
+    typeof navigator !== 'undefined' &&
+    /Android/i.test(navigator.userAgent);
+
   const [tab, setTab] = useState<SettingsTab>(initialTab);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [selectedProviderId, setSelectedProviderId] = useState<string>(
     settings.activeModel.providerId || settings.providers[0]?.id || ''
   );
@@ -157,7 +169,10 @@ export function SettingsModal({
   const importFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) setTab(initialTab);
+    if (open) {
+      setTab(initialTab);
+      setMobileDetailOpen(initialTab !== 'providers');
+    }
   }, [open, initialTab]);
 
   const activeProvider =
@@ -443,81 +458,162 @@ export function SettingsModal({
     }
   };
 
+  const navItems = [
+    { id: 'providers' as const, label: 'AI 服务商与模型', desc: '配置模型接口与 API Key', icon: Bot },
+    { id: 'skills' as const, label: '自定义 Skills', desc: '管理运维规范与 Prompt', icon: Sparkles },
+    { id: 'permissions' as const, label: '命令权限与安全', desc: '危险命令分级审批策略', icon: ShieldCheck },
+    { id: 'appearance' as const, label: '外观与终端', desc: '浅色/深色与终端配色', icon: Palette },
+    { id: 'sync' as const, label: '账号与数据同步', desc: '云端同步与配置导入导出', icon: Cloud },
+    {
+      id: 'about' as const,
+      label: isWeb ? '关于 ISSH' : '关于与更新',
+      desc: isWeb ? `当前版本 v${APP_VERSION}` : `版本 v${APP_VERSION} 与更新检查`,
+      icon: Info,
+    },
+  ];
+
+  const currentTabTitle =
+    tab === 'providers'
+      ? 'AI 服务商与模型'
+      : tab === 'skills'
+        ? '自定义 Skills'
+        : tab === 'permissions'
+          ? '命令权限与安全'
+          : tab === 'appearance'
+            ? '外观与终端偏好'
+            : tab === 'sync'
+              ? '账号与数据同步'
+              : isWeb
+                ? '关于 ISSH'
+                : '关于 ISSH 与版本更新';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-2 sm:p-4 backdrop-blur-sm">
-      <div className="flex h-[92vh] w-[96vw] flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0e1420] text-xs text-slate-200 shadow-2xl md:h-[84vh] md:w-[92vw] md:max-w-5xl md:flex-row">
-        {/* Left Navigation (horizontal scroll bar on mobile, sidebar on desktop) */}
-        <nav className="flex shrink-0 flex-row items-center gap-1 overflow-x-auto border-b border-white/10 bg-[#0b0f17] p-2 md:w-48 md:flex-col md:items-stretch md:border-b-0 md:border-r md:p-3">
-          <div className="mb-4 hidden px-2 text-sm font-semibold text-white md:block">软件设置</div>
-          <div className="flex flex-row gap-1 md:flex-col md:space-y-1">
-            {(
-              [
-                { id: 'providers', label: 'AI 服务商与模型', icon: Bot },
-                { id: 'skills', label: '自定义 Skills', icon: Sparkles },
-                { id: 'permissions', label: '命令权限与安全', icon: ShieldCheck },
-                { id: 'appearance', label: '外观与终端', icon: Palette },
-                { id: 'sync', label: '账号与数据同步', icon: Cloud },
-                { id: 'about', label: '关于与更新', icon: Info },
-              ] as const
-            ).map((item) => {
-              const Icon = item.icon;
-              const active = tab === item.id;
-              const showDot = item.id === 'about' && Boolean(effectiveUpdateInfo?.hasUpdate);
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left transition ${
-                    active
-                      ? 'bg-sky-500/20 font-medium text-sky-300'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span>{item.label}</span>
-                  </span>
-                  {showDot && (
-                    <span className="h-2 w-2 rounded-full bg-rose-500" title="发现新版本" />
-                  )}
-                </button>
-              );
-            })}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-0 backdrop-blur-sm md:p-4">
+      <div className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#0e1420] text-xs text-slate-200 shadow-2xl md:h-[84vh] md:w-[92vw] md:max-w-5xl md:flex-row md:rounded-2xl md:border md:border-white/15">
+        {/* Phone Level-1 Main Menu (Native Mobile Settings Drill-Down) */}
+        {isPhone && !mobileDetailOpen ? (
+          <div className="flex h-full w-full flex-col bg-[#0b0f17]">
+            <header className="flex shrink-0 items-center justify-between border-b border-white/10 bg-[#0e1420] px-4 py-3.5">
+              <h2 className="text-base font-semibold text-white">设置</h2>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 active:bg-white/10"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3.5">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const showDot =
+                  !isWeb &&
+                  item.id === 'about' &&
+                  Boolean(effectiveUpdateInfo?.hasUpdate);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setTab(item.id);
+                      setMobileDetailOpen(true);
+                    }}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0e1420] px-4 py-3.5 text-left transition active:scale-[0.99] active:bg-white/5"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sky-400">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-white">{item.label}</div>
+                        <div className="mt-0.5 truncate text-[11px] text-slate-400">
+                          {item.desc}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {showDot && (
+                        <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+                      )}
+                      <ChevronRight className="h-4 w-4 text-slate-500" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </nav>
+        ) : (
+          <>
+            {/* Tablet / Desktop Left Sidebar Navigation */}
+            {!isPhone && (
+              <nav className="flex w-48 shrink-0 flex-col border-r border-white/10 bg-[#0b0f17] p-3">
+                <div className="mb-4 px-2 text-sm font-semibold text-white">软件设置</div>
+                <div className="flex flex-col space-y-1">
+                  {navItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = tab === item.id;
+                    const showDot =
+                      !isWeb &&
+                      item.id === 'about' &&
+                      Boolean(effectiveUpdateInfo?.hasUpdate);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setTab(item.id)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left transition ${
+                          active
+                            ? 'bg-sky-500/20 font-medium text-sky-300'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span>{item.label}</span>
+                        </span>
+                        {showDot && (
+                          <span className="h-2 w-2 rounded-full bg-rose-500" title="发现新版本" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
+            )}
 
-        {/* Right Content */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-            <h2 className="text-sm font-semibold text-white">
-              {tab === 'providers'
-                ? 'AI 服务商与模型管理'
-                : tab === 'skills'
-                  ? '自定义 Skills（支持上传 / 下载 .md 与预览编辑）'
-                  : tab === 'permissions'
-                    ? '命令危险等级与审批策略'
-                    : tab === 'appearance'
-                      ? '外观与终端偏好'
-                      : tab === 'sync'
-                        ? '账号与数据同步'
-                        : '关于 ISSH 与版本更新'}
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </header>
+            {/* Right / Level-2 Content */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <header className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 px-4 py-3 md:px-5">
+                <div className="flex min-w-0 items-center gap-2">
+                  {isPhone && (
+                    <button
+                      type="button"
+                      onClick={() => setMobileDetailOpen(false)}
+                      className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 text-sm font-medium text-sky-400 active:bg-white/10"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      <span>返回</span>
+                    </button>
+                  )}
+                  <h2 className="truncate text-sm font-semibold text-white">
+                    {currentTabTitle}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
             {/* TAB 1: PROVIDERS */}
             {tab === 'providers' && (
-              <div className="flex h-full gap-4">
+              <div className="flex flex-col gap-4 md:h-full md:flex-row">
                 {/* Provider List */}
-                <div className="flex w-48 shrink-0 flex-col gap-2 border-r border-white/10 pr-3">
+                <div className="flex w-full shrink-0 flex-col gap-2 border-b border-white/10 pb-3 md:w-48 md:border-b-0 md:border-r md:pb-0 md:pr-3">
                   <button
                     type="button"
                     onClick={() => setAddPickerOpen(true)}
@@ -597,7 +693,7 @@ export function SettingsModal({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
                           <label className="mb-1 block text-slate-400">服务商名称</label>
                           <input
@@ -771,8 +867,8 @@ export function SettingsModal({
 
             {/* TAB 2: SKILLS (Markdown Upload / Download + Live Preview Editor) */}
             {tab === 'skills' && (
-              <div className="flex h-full gap-4">
-                <div className="flex w-48 shrink-0 flex-col gap-2 border-r border-white/10 pr-3">
+              <div className="flex flex-col gap-4 md:h-full md:flex-row">
+                <div className="flex w-full shrink-0 flex-col gap-2 border-b border-white/10 pb-3 md:w-48 md:border-b-0 md:border-r md:pb-0 md:pr-3">
                   <div className="flex gap-1.5">
                     <button
                       type="button"
@@ -954,7 +1050,7 @@ export function SettingsModal({
             {/* TAB 3: PERMISSIONS */}
             {tab === 'permissions' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {(
                     [
                       {
@@ -1351,21 +1447,25 @@ export function SettingsModal({
             {/* TAB 6: ABOUT & UPDATE CHECKER */}
             {tab === 'about' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+                <div className="flex flex-col justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:flex-row sm:items-center sm:p-5">
                   <div className="flex items-center gap-4">
                     <img
                       src="./favicon.png"
                       alt="ISSH"
-                      className="h-14 w-14 rounded-2xl border border-white/15 bg-[#090d14] p-1 shadow-lg"
+                      className="h-14 w-14 shrink-0 rounded-2xl border border-white/15 bg-[#090d14] p-1 shadow-lg"
                     />
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-base font-bold text-white">ISSH</span>
                         <span className="rounded-full border border-sky-500/35 bg-sky-500/15 px-2.5 py-0.5 font-mono text-[11px] font-medium text-sky-300">
                           v{APP_VERSION}
                         </span>
                         <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-400">
-                          {isTauriRuntime() ? 'Desktop 客户端' : 'Web 客户端'}
+                          {isAndroid
+                            ? 'Android 客户端'
+                            : isTauriRuntime()
+                              ? 'Desktop 客户端'
+                              : 'Web 客户端'}
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-400">
@@ -1374,130 +1474,147 @@ export function SettingsModal({
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={checkingUpdate}
-                    onClick={async () => {
-                      setCheckingUpdate(true);
-                      setUpdateErr(null);
-                      setUpToDateNotice(false);
-                      try {
-                        const res = await checkAppUpdate(true);
-                        setLocalUpdateInfo(res);
-                        onUpdateChecked?.(res);
-                        if (!res.hasUpdate) {
-                          setUpToDateNotice(true);
+                  {!isWeb && (
+                    <button
+                      type="button"
+                      disabled={checkingUpdate}
+                      onClick={async () => {
+                        setCheckingUpdate(true);
+                        setUpdateErr(null);
+                        setUpToDateNotice(false);
+                        try {
+                          const res = await checkAppUpdate(true);
+                          setLocalUpdateInfo(res);
+                          onUpdateChecked?.(res);
+                          if (!res.hasUpdate) {
+                            setUpToDateNotice(true);
+                          }
+                        } catch (e) {
+                          setUpdateErr(e instanceof Error ? e.message : String(e));
+                        } finally {
+                          setCheckingUpdate(false);
                         }
-                      } catch (e) {
-                        setUpdateErr(e instanceof Error ? e.message : String(e));
-                      } finally {
-                        setCheckingUpdate(false);
-                      }
-                    }}
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-2 font-medium text-white transition hover:bg-sky-400 disabled:opacity-50"
-                  >
-                    <RefreshCw
-                      className={`h-3.5 w-3.5 ${checkingUpdate ? 'animate-spin' : ''}`}
-                    />
-                    {checkingUpdate ? '检查中...' : '检查更新'}
-                  </button>
+                      }}
+                      className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-2 font-medium text-white transition hover:bg-sky-400 disabled:opacity-50"
+                    >
+                      <RefreshCw
+                        className={`h-3.5 w-3.5 ${checkingUpdate ? 'animate-spin' : ''}`}
+                      />
+                      {checkingUpdate ? '检查中...' : '检查更新'}
+                    </button>
+                  )}
                 </div>
 
-                {updateErr && (
+                {isWeb && (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[11px] text-slate-400">
+                    Web 端与服务端一体部署，版本升级由服务器管理员在后台统一维护。
+                  </div>
+                )}
+
+                {!isWeb && updateErr && (
                   <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-300">
                     {updateErr}
                   </div>
                 )}
 
-                {upToDateNotice && !effectiveUpdateInfo?.hasUpdate && (
+                {!isWeb && upToDateNotice && !effectiveUpdateInfo?.hasUpdate && (
                   <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-300">
                     <Check className="h-4 w-4" />
                     <span>当前已是最新版本 (v{APP_VERSION})</span>
                   </div>
                 )}
 
-                {effectiveUpdateInfo?.hasUpdate && (
-                  <div className="space-y-2.5 rounded-xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4">
-                    <div className="font-semibold text-white">
-                      发现新版本 {effectiveUpdateInfo.tagName}
-                    </div>
-
-                    {effectiveUpdateInfo.notes && (
-                      <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-[#090d14] p-3 font-sans text-[11px] leading-relaxed text-slate-300">
-                        {effectiveUpdateInfo.notes}
-                      </pre>
-                    )}
-
-                    {installingUpdate && (
-                      <div className="space-y-1.5 pt-1">
-                        <div className="flex items-center justify-between text-[11px] text-emerald-300">
-                          <span>
-                            {installPhase === 'checking'
-                              ? '正在校验更新包签名...'
-                              : installPhase === 'downloading'
-                                ? `正在下载更新包 (${installProgress}%)...`
-                                : '正在安装并准备重启...'}
-                          </span>
-                          <span className="font-mono">{installProgress}%</span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-emerald-400 transition-all duration-200"
-                            style={{ width: `${installProgress}%` }}
-                          />
-                        </div>
+                {!isWeb && effectiveUpdateInfo?.hasUpdate && (() => {
+                  const apkAsset = effectiveUpdateInfo.assets.find((a) =>
+                    a.name.toLowerCase().endsWith('.apk')
+                  );
+                  return (
+                    <div className="space-y-2.5 rounded-xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4">
+                      <div className="font-semibold text-white">
+                        发现新版本 {effectiveUpdateInfo.tagName}
                       </div>
-                    )}
 
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      {isTauriRuntime() ? (
-                        <button
-                          type="button"
-                          disabled={installingUpdate}
-                          onClick={async () => {
-                            setInstallingUpdate(true);
-                            setUpdateErr(null);
-                            try {
-                              const ok = await installDesktopUpdate((pct, phase) => {
-                                setInstallProgress(pct);
-                                setInstallPhase(phase);
-                              });
-                              if (!ok) {
-                                setUpToDateNotice(true);
-                              }
-                            } catch (e) {
-                              setUpdateErr(
-                                `自动更新失败：${e instanceof Error ? e.message : String(e)}`
-                              );
-                            } finally {
-                              setInstallingUpdate(false);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 font-medium text-white transition hover:bg-emerald-400 disabled:opacity-50"
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                          {installingUpdate
-                            ? '正在更新...'
-                            : `一键更新并重启 (${effectiveUpdateInfo.tagName})`}
-                        </button>
-                      ) : (
-                        <a
-                          href={effectiveUpdateInfo.htmlUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 font-medium text-white hover:bg-emerald-400"
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                          下载最新版 ({effectiveUpdateInfo.tagName})
-                        </a>
+                      {effectiveUpdateInfo.notes && (
+                        <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-[#090d14] p-3 font-sans text-[11px] leading-relaxed text-slate-300">
+                          {effectiveUpdateInfo.notes}
+                        </pre>
                       )}
+
+                      {installingUpdate && (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between text-[11px] text-emerald-300">
+                            <span>
+                              {installPhase === 'checking'
+                                ? '正在校验更新包签名...'
+                                : installPhase === 'downloading'
+                                  ? `正在下载更新包 (${installProgress}%)...`
+                                  : '正在安装并准备重启...'}
+                            </span>
+                            <span className="font-mono">{installProgress}%</span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className="h-full rounded-full bg-emerald-400 transition-all duration-200"
+                              style={{ width: `${installProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {isAndroid ? (
+                          <a
+                            href={apkAsset?.downloadUrl || effectiveUpdateInfo.htmlUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-2 font-medium text-white hover:bg-emerald-400"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            {apkAsset
+                              ? `下载新版 APK (${effectiveUpdateInfo.tagName})`
+                              : `前往下载新版 (${effectiveUpdateInfo.tagName})`}
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={installingUpdate}
+                            onClick={async () => {
+                              setInstallingUpdate(true);
+                              setUpdateErr(null);
+                              try {
+                                const ok = await installDesktopUpdate((pct, phase) => {
+                                  setInstallProgress(pct);
+                                  setInstallPhase(phase);
+                                });
+                                if (!ok) {
+                                  setUpToDateNotice(true);
+                                }
+                              } catch (e) {
+                                setUpdateErr(
+                                  `自动更新失败：${e instanceof Error ? e.message : String(e)}`
+                                );
+                              } finally {
+                                setInstallingUpdate(false);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 font-medium text-white transition hover:bg-emerald-400 disabled:opacity-50"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            {installingUpdate
+                              ? '正在更新...'
+                              : `一键更新并重启 (${effectiveUpdateInfo.tagName})`}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* CLIProxy-style Add Provider Preset Picker Modal (with Brand SVG Icons) */}
