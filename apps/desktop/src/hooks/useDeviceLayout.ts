@@ -9,18 +9,17 @@ function detectDeviceMode(): { mode: DeviceMode; isTouch: boolean; isAndroidApp:
   const ua = navigator.userAgent || '';
   const isAndroidUA = /Android/i.test(ua);
   const isIOSUA = /iPhone|iPad|iPod/i.test(ua);
-  const isTouch =
-    isAndroidUA ||
-    isIOSUA ||
-    window.matchMedia('(pointer: coarse)').matches ||
-    navigator.maxTouchPoints > 0;
+  const isIPadOS = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+  const isMobileOS = isAndroidUA || isIOSUA || isIPadOS;
+  const isTouch = isMobileOS || window.matchMedia('(pointer: coarse)').matches;
   const w = window.innerWidth;
 
   if (w < 768) {
     return { mode: 'phone', isTouch, isAndroidApp: isAndroidUA };
   }
-  // Touch tablets (Android Pad / iPad / >=768px touch screen) get dedicated Touch Tablet UI
-  if (isTouch) {
+  // Only true mobile/tablet OSes (Android Pad / iPad) use the Touch Tablet UI.
+  // Windows / macOS / Linux PCs (even with touchscreens) always use the full Desktop UI.
+  if (isMobileOS) {
     return { mode: 'tablet', isTouch: true, isAndroidApp: isAndroidUA };
   }
   return { mode: 'desktop', isTouch: false, isAndroidApp: false };
