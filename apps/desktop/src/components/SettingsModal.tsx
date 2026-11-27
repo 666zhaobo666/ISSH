@@ -1585,18 +1585,33 @@ export function SettingsModal({
 
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         {isAndroid ? (
-                          apkAsset && hasAndroidInAppUpdater() ? (
+                          hasAndroidInAppUpdater() ? (
                             <button
                               type="button"
                               disabled={installingUpdate}
                               onClick={async () => {
                                 setInstallingUpdate(true);
                                 setInstallProgress(0);
-                                setInstallPhase('downloading');
+                                setInstallPhase('checking');
                                 setUpdateErr(null);
                                 try {
+                                  let targetApk = apkAsset;
+                                  if (!targetApk) {
+                                    const fresh = await checkAppUpdate(true);
+                                    setLocalUpdateInfo(fresh);
+                                    onUpdateChecked?.(fresh);
+                                    targetApk = fresh.assets.find((a) =>
+                                      a.name.toLowerCase().endsWith('.apk')
+                                    );
+                                  }
+                                  if (!targetApk) {
+                                    throw new Error(
+                                      'Android 安装包正在云端打包中，请稍候 1~2 分钟后再点一键更新'
+                                    );
+                                  }
+                                  setInstallPhase('downloading');
                                   await installAndroidUpdate(
-                                    apkAsset.downloadUrl,
+                                    targetApk.downloadUrl,
                                     (pct, phase) => {
                                       setInstallProgress(pct);
                                       setInstallPhase(phase);

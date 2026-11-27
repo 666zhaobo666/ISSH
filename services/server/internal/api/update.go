@@ -32,15 +32,34 @@ var (
 	releaseCacheAt   time.Time
 )
 
+func hasApkAsset(dto *LatestReleaseDTO) bool {
+	if dto == nil {
+		return false
+	}
+	for _, a := range dto.Assets {
+		if strings.HasSuffix(strings.ToLower(a.Name), ".apk") {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) handleGetLatestRelease(w http.ResponseWriter, r *http.Request) {
 	force := r.URL.Query().Get("refresh") == "1"
 
 	releaseCacheMu.RLock()
-	if !force && releaseCacheData != nil && time.Since(releaseCacheAt) < 5*time.Minute {
-		cached := *releaseCacheData
-		releaseCacheMu.RUnlock()
-		writeJSON(w, http.StatusOK, cached)
-		return
+	if !force && releaseCacheData != nil {
+		ttl := 5 * time.Minute
+		if releaseCacheData.HasRelease && !hasApkAsset(releaseCacheData) {
+			// Android APK uploads a few minutes after Windows; use short 15s TTL until APK appears
+			ttl = 15 * time.Second
+		}
+		if time.Since(releaseCacheAt) < ttl {
+			cached := *releaseCacheData
+			releaseCacheMu.RUnlock()
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
 	}
 	releaseCacheMu.RUnlock()
 
