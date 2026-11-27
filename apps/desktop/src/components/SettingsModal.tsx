@@ -1557,16 +1557,10 @@ export function SettingsModal({
                     a.name.toLowerCase().endsWith('.apk')
                   );
                   return (
-                    <div className="space-y-2.5 rounded-xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4">
+                    <div className="space-y-3 rounded-xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4">
                       <div className="font-semibold text-white">
                         发现新版本 {effectiveUpdateInfo.tagName}
                       </div>
-
-                      {effectiveUpdateInfo.notes && (
-                        <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-[#090d14] p-3 font-sans text-[11px] leading-relaxed text-slate-300">
-                          {effectiveUpdateInfo.notes}
-                        </pre>
-                      )}
 
                       {installingUpdate && (
                         <div className="space-y-1.5 pt-1">
