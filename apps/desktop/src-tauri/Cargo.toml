@@ -1,6 +1,6 @@
 [package]
 name = "issh-desktop"
-version = "0.1.9"
+version = "0.1.10"
 description = "ISSH — Modern AI SSH Workspace"
 authors = ["ISSH"]
 edition = "2021"
@@ -24,6 +24,7 @@ uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 window-vibrancy = "0.6"
 arboard = "3"
