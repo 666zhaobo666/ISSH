@@ -66,6 +66,7 @@ export interface BannedIPItem {
 }
 
 export interface SystemUpdateStatus {
+  currentVersion?: string;
   agentOnline: boolean;
   state: 'idle' | 'queued' | 'running' | 'success' | 'error';
   startedAt?: number;

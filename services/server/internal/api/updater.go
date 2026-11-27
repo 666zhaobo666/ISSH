@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -44,6 +45,21 @@ func (s *Server) readUpdateStatus(statusPath string) systemUpdateStatusFile {
 	return st
 }
 
+func readCurrentServerVersion() string {
+	for _, p := range []string{"/app/VERSION", "VERSION"} {
+		if raw, err := os.ReadFile(p); err == nil {
+			v := strings.TrimSpace(string(raw))
+			if v != "" {
+				if !strings.HasPrefix(v, "v") {
+					return "v" + v
+				}
+				return v
+			}
+		}
+	}
+	return "v0.1.11"
+}
+
 func (s *Server) handleAdminSystemUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	_, statusPath, logPath, heartbeatPath := s.updaterPaths()
 	online := s.isUpdaterAgentOnline(heartbeatPath)
@@ -59,12 +75,13 @@ func (s *Server) handleAdminSystemUpdateStatus(w http.ResponseWriter, r *http.Re
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"agentOnline": online,
-		"state":       st.State,
-		"startedAt":   st.StartedAt,
-		"finishedAt":  st.FinishedAt,
-		"message":     st.Message,
-		"log":         logText,
+		"currentVersion": readCurrentServerVersion(),
+		"agentOnline":    online,
+		"state":          st.State,
+		"startedAt":      st.StartedAt,
+		"finishedAt":     st.FinishedAt,
+		"message":        st.Message,
+		"log":            logText,
 	})
 }
 

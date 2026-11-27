@@ -67,6 +67,10 @@ export default function App() {
   } | null>(null);
   const [updateStatus, setUpdateStatus] = useState<SystemUpdateStatus | null>(null);
   const [triggeringUpdate, setTriggeringUpdate] = useState(false);
+  const [ackUpdateAt, setAckUpdateAt] = useState<number>(() =>
+    Number(localStorage.getItem('issh.admin.ack_update_at.v1') || '0')
+  );
+  const [showUpdateLog, setShowUpdateLog] = useState(false);
 
   // Users
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -527,111 +531,158 @@ export default function App() {
             </div>
 
             {/* Server & Web One-Click Update Control (Admin-only, Scheme A) */}
-            <div className="rounded-xl border border-white/10 bg-[#101622] p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="font-semibold text-white">服务端与 Web 端一键更新</div>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      updateStatus?.agentOnline
-                        ? 'bg-emerald-500/15 text-emerald-300'
-                        : 'bg-amber-500/15 text-amber-300'
-                    }`}
-                  >
-                    {updateStatus?.agentOnline ? '● 更新守护进程在线' : '○ 未安装守护进程'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 font-mono text-[11px] text-sky-300">
-                    最新 Release：{latestRelease?.hasRelease ? latestRelease.tagName : '检测中...'}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={
-                      triggeringUpdate ||
-                      updateStatus?.state === 'queued' ||
-                      updateStatus?.state === 'running'
-                    }
-                    onClick={async () => {
-                      setTriggeringUpdate(true);
-                      try {
-                        await apiRequest('/api/admin/system/update', { method: 'POST' });
-                        showToast('ok', '已触发一键更新，正在拉取代码并重建容器...');
-                        await loadUpdateStatus();
-                      } catch (e) {
-                        showToast('err', e instanceof Error ? e.message : String(e));
-                      } finally {
-                        setTriggeringUpdate(false);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-sky-400 disabled:opacity-50"
-                  >
-                    <RefreshCw
-                      className={`h-3.5 w-3.5 ${
-                        triggeringUpdate ||
-                        updateStatus?.state === 'queued' ||
-                        updateStatus?.state === 'running'
-                          ? 'animate-spin'
-                          : ''
-                      }`}
-                    />
-                    {updateStatus?.state === 'queued' || updateStatus?.state === 'running'
-                      ? '正在更新构建中...'
-                      : '一键更新服务端与 Web 端'}
-                  </button>
-                </div>
-              </div>
+            {(() => {
+              const curVer = updateStatus?.currentVersion || '-';
+              const latestVer = latestRelease?.hasRelease ? latestRelease.tagName : '';
+              const isUpToDate = Boolean(curVer && latestVer && curVer === latestVer);
+              const isRunning =
+                updateStatus?.state === 'queued' || updateStatus?.state === 'running';
+              const showResultBanner =
+                Boolean(updateStatus?.message) &&
+                (isRunning ||
+                  updateStatus?.state === 'error' ||
+                  (updateStatus?.state === 'success' &&
+                    (updateStatus.finishedAt ?? 0) > ackUpdateAt));
 
-              {updateStatus?.message && (
-                <div
-                  className={`rounded-lg border px-3 py-2 text-[11px] ${
-                    updateStatus.state === 'error'
-                      ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
-                      : updateStatus.state === 'success'
-                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                        : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
-                  }`}
-                >
-                  {updateStatus.message}
-                  {updateStatus.state === 'success' && (
-                    <button
-                      type="button"
-                      onClick={() => window.location.reload()}
-                      className="ml-3 rounded bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-400"
+              return (
+                <div className="rounded-xl border border-white/10 bg-[#101622] p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="font-semibold text-white">服务端与 Web 端一键更新</div>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          updateStatus?.agentOnline
+                            ? 'bg-emerald-500/15 text-emerald-300'
+                            : 'bg-amber-500/15 text-amber-300'
+                        }`}
+                      >
+                        {updateStatus?.agentOnline ? '● 更新守护进程在线' : '○ 未安装守护进程'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 font-mono text-[11px] text-slate-300">
+                        当前版本：{curVer}
+                      </span>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 font-mono text-[11px] ${
+                          isUpToDate
+                            ? 'bg-emerald-500/15 text-emerald-300'
+                            : 'bg-sky-500/15 text-sky-300'
+                        }`}
+                      >
+                        {isUpToDate
+                          ? `✓ 已是最新 (${latestVer})`
+                          : `最新 Release：${latestVer || '检测中...'}`}
+                      </span>
+                      {updateStatus?.log && !isRunning && (
+                        <button
+                          type="button"
+                          onClick={() => setShowUpdateLog((v) => !v)}
+                          className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] text-slate-300 hover:bg-white/10"
+                        >
+                          {showUpdateLog ? '收起日志' : '上次日志'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={triggeringUpdate || isRunning}
+                        onClick={async () => {
+                          setTriggeringUpdate(true);
+                          setShowUpdateLog(true);
+                          try {
+                            await apiRequest('/api/admin/system/update', { method: 'POST' });
+                            showToast('ok', '已触发一键更新，正在拉取代码并重建容器...');
+                            await loadUpdateStatus();
+                          } catch (e) {
+                            showToast('err', e instanceof Error ? e.message : String(e));
+                          } finally {
+                            setTriggeringUpdate(false);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-sky-400 disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`h-3.5 w-3.5 ${
+                            triggeringUpdate || isRunning ? 'animate-spin' : ''
+                          }`}
+                        />
+                        {isRunning ? '正在更新构建中...' : '一键更新服务端与 Web 端'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {showResultBanner && updateStatus?.message && (
+                    <div
+                      className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[11px] ${
+                        updateStatus.state === 'error'
+                          ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                          : updateStatus.state === 'success'
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                            : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                      }`}
                     >
-                      刷新页面生效
-                    </button>
+                      <span>{updateStatus.message}</span>
+                      {updateStatus.state === 'success' && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const ts = updateStatus.finishedAt || Date.now();
+                              localStorage.setItem('issh.admin.ack_update_at.v1', String(ts));
+                              setAckUpdateAt(ts);
+                              setShowUpdateLog(false);
+                              window.location.reload();
+                            }}
+                            className="rounded bg-emerald-500 px-2.5 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-400"
+                          >
+                            刷新页面生效
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const ts = updateStatus.finishedAt || Date.now();
+                              localStorage.setItem('issh.admin.ack_update_at.v1', String(ts));
+                              setAckUpdateAt(ts);
+                              setShowUpdateLog(false);
+                            }}
+                            className="rounded border border-white/15 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-white/10"
+                          >
+                            知道了
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!updateStatus?.agentOnline && (
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] text-slate-400">
+                        首次启用面板按钮一键更新，只需在 VPS 项目目录运行一次以下安装命令即可（之后永久在面板点按钮更新）：
+                      </p>
+                      <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#090d14] px-3 py-2 font-mono text-[11px] text-emerald-300">
+                        <code>sudo bash deploy/install-updater.sh</code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText('sudo bash deploy/install-updater.sh');
+                            showToast('ok', '已复制守护进程安装命令');
+                          }}
+                          className="flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-slate-200 hover:bg-white/20"
+                        >
+                          <Copy className="h-3 w-3" /> 复制
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {updateStatus?.log && (isRunning || showUpdateLog || updateStatus.state === 'error') && (
+                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-[#090d14] p-3 font-mono text-[11px] leading-relaxed text-slate-300">
+                      {updateStatus.log}
+                    </pre>
                   )}
                 </div>
-              )}
-
-              {!updateStatus?.agentOnline && (
-                <div className="space-y-1.5">
-                  <p className="text-[11px] text-slate-400">
-                    首次启用面板按钮一键更新，只需在 VPS 项目目录运行一次以下安装命令即可（之后永久在面板点按钮更新）：
-                  </p>
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#090d14] px-3 py-2 font-mono text-[11px] text-emerald-300">
-                    <code>sudo bash deploy/install-updater.sh</code>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void navigator.clipboard.writeText('sudo bash deploy/install-updater.sh');
-                        showToast('ok', '已复制守护进程安装命令');
-                      }}
-                      className="flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-slate-200 hover:bg-white/20"
-                    >
-                      <Copy className="h-3 w-3" /> 复制
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {updateStatus?.log && (
-                <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-[#090d14] p-3 font-mono text-[11px] leading-relaxed text-slate-300">
-                  {updateStatus.log}
-                </pre>
-              )}
-            </div>
+              );
+            })()}
           </div>
         )}
 
