@@ -9,11 +9,9 @@
   "scripts": {
     "dev:desktop": "npm run dev --workspace=@issh/desktop",
     "dev:admin": "npm run dev --workspace=@issh/admin",
-    "dev:web": "npm run dev --workspace=@issh/web",
     "build:core": "npm run build --workspace=@issh/core",
     "build:desktop": "npm run build --workspace=@issh/desktop",
     "build:admin": "npm run build --workspace=@issh/admin",
-    "build:web": "npm run build --workspace=@issh/web",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

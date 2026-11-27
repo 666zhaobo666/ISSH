@@ -1533,12 +1533,6 @@ export function SettingsModal({
                   )}
                 </div>
 
-                {isWeb && (
-                  <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[11px] text-slate-400">
-                    Web 端与服务端一体部署，版本升级由服务器管理员在后台统一维护。
-                  </div>
-                )}
-
                 {!isWeb && updateErr && (
                   <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-300">
                     {updateErr}

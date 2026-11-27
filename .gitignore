@@ -21,6 +21,8 @@ src-tauri/target/
 services/server/data/
 services/server/issh-server
 services/server/issh-server.exe
+services/server/issh-server.exe~
+*.exe~
 issh-data/
 *.db
 *.db-wal
