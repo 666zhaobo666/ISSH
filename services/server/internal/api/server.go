@@ -221,17 +221,36 @@ func (s *Server) Handler() http.Handler {
 	return s.withCORS(mux)
 }
 
+func isAllowedOrigin(reqOrigin, configured string) bool {
+	if reqOrigin == "" {
+		return false
+	}
+	// Always allow native Tauri Desktop / Android WebView origins
+	switch reqOrigin {
+	case "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost":
+		return true
+	}
+	for _, part := range strings.Split(configured, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), reqOrigin) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := s.Cfg.CORSOrigin
-		if origin == "*" {
-			if reqOrigin := r.Header.Get("Origin"); reqOrigin != "" {
+		origin := strings.TrimSpace(s.Cfg.CORSOrigin)
+		reqOrigin := r.Header.Get("Origin")
+		if origin == "" || origin == "*" {
+			if reqOrigin != "" {
 				w.Header().Set("Access-Control-Allow-Origin", reqOrigin)
 			} else {
 				w.Header().Set("Access-Control-Allow-Origin", "*")
 			}
-		} else {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
+		} else if isAllowedOrigin(reqOrigin, origin) {
+			w.Header().Set("Access-Control-Allow-Origin", reqOrigin)
+			w.Header().Set("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")

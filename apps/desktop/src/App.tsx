@@ -69,6 +69,13 @@ import {
   type CloudUser,
 } from './cloud/cloudClient';
 import {
+  AI_THREAD_DELETED_EVENT,
+  PROFILE_LOCAL_CHANGED_EVENT,
+  SAVED_COMMANDS_UPDATED_EVENT,
+  applyCloudThreadRecords,
+  clearThreadSyncTracking,
+  getDirtyThreadsToPush,
+  markThreadsPushed,
   mergeAiThreads,
   mergeUserProfiles,
   readLocalThreads,
@@ -154,7 +161,10 @@ export function App() {
   const [resolvingConflict, setResolvingConflict] = useState(false);
   const suppressNextPushRef = useRef(false);
   const syncReadyForUserRef = useRef<string | null>(null);
+  const syncInFlightRef = useRef(false);
+  const pendingResyncRef = useRef(false);
   const pushTimerRef = useRef<number | null>(null);
+  const [profileChangeTick, setProfileChangeTick] = useState(0);
 
   const applyBundleToState = (bundle: IsshUserProfileBundle) => {
     suppressNextPushRef.current = true;
@@ -167,6 +177,8 @@ export function App() {
     setHosts(bundle.hosts);
     setAiSettings(bundle.aiSettings);
     setThemeId(bundle.appearance.terminalThemeId);
+    // Notify SavedCommandsPane & other localStorage-backed panes to refresh immediately
+    window.dispatchEvent(new CustomEvent(SAVED_COMMANDS_UPDATED_EVENT));
     window.setTimeout(() => {
       suppressNextPushRef.current = false;
     }, 300);
@@ -180,6 +192,11 @@ export function App() {
   ) => {
     const activeUser = userOverride !== undefined ? userOverride : cloudUser;
     if (!activeUser || !getCloudToken()) return;
+    if (syncInFlightRef.current) {
+      pendingResyncRef.current = true;
+      return;
+    }
+    syncInFlightRef.current = true;
     if (!silent) setSyncStatus('syncing');
     try {
       const hb = await fetchSyncHeartbeat();
@@ -234,7 +251,8 @@ export function App() {
         }
         if (pulled.exists && pulled.profile) {
           applyBundleToState(pulled.profile);
-          if (cloudThreads.length > 0) writeLocalThreads(cloudThreads);
+          const applied = applyCloudThreadRecords([], pulledThreadsRes.threads);
+          if (applied.threads.length > 0) writeLocalThreads(applied.threads);
           const now = Date.now();
           setSyncMeta({
             userId: activeUser.id,
@@ -265,30 +283,32 @@ export function App() {
         nextProfileVer = pushed.version;
       }
 
-      // Pull incremental AI threads if cloud is ahead (or forcePull on login)
+      // Pull incremental AI threads & deletion tombstones if cloud is ahead (or forcePull on login)
       if (forcePull || hb.threadsMaxVersion > meta.threadsMaxVersion) {
         const pulledT = await pullCloudThreads(forcePull ? 0 : meta.threadsMaxVersion);
-        const incoming = pulledT.threads
-          .filter((t) => !t.deleted && t.data)
-          .map((t) => t.data as LocalAiThread);
-        if (incoming.length > 0) {
-          const merged = mergeAiThreads(readLocalThreads(), incoming);
-          writeLocalThreads(merged);
+        if (pulledT.threads.length > 0) {
+          const applied = applyCloudThreadRecords(readLocalThreads(), pulledT.threads);
+          if (applied.changed) {
+            writeLocalThreads(applied.threads);
+          }
         }
-        nextThreadsVer = pulledT.maxVersion;
+        if (pulledT.maxVersion > nextThreadsVer) {
+          nextThreadsVer = pulledT.maxVersion;
+        }
       }
 
-      // Push local AI chat threads only on the periodic 30s heartbeat / manual sync (not per keystroke)
-      const localT = readLocalThreads().filter((t) => (t.messages?.length ?? 0) > 0);
-      if (localT.length > 0) {
+      // Push ONLY locally created/modified threads & newly deleted tombstones (no redundant re-pushes!)
+      const dirtyThreads = getDirtyThreadsToPush();
+      if (dirtyThreads.length > 0) {
         const pt = await pushCloudThreads(
-          localT.map((t) => ({
-            threadId: t.id,
-            deleted: false,
-            updatedAt: t.updatedAt ?? Date.now(),
-            data: t,
+          dirtyThreads.map((t) => ({
+            threadId: t.threadId,
+            deleted: t.deleted,
+            updatedAt: t.updatedAt,
+            data: t.data,
           }))
         );
+        markThreadsPushed(dirtyThreads);
         if (pt.maxVersion > nextThreadsVer) {
           nextThreadsVer = pt.maxVersion;
         }
@@ -306,6 +326,12 @@ export function App() {
       if (!silent) setSyncStatus('synced');
     } catch {
       if (!silent) setSyncStatus('error');
+    } finally {
+      syncInFlightRef.current = false;
+      if (pendingResyncRef.current) {
+        pendingResyncRef.current = false;
+        void runSyncCycle(false, activeUser, true, false);
+      }
     }
   };
 
@@ -394,7 +420,8 @@ export function App() {
   }, []);
 
   // 30-second silent background heartbeat sync (no UI flicker; also syncs AI threads)
-  // Plus immediate silent pull when returning to foreground / focusing app
+  // Plus immediate silent pull when returning to foreground / focusing app,
+  // and immediate tombstone push when user deletes an AI thread.
   useEffect(() => {
     if (!cloudUser) return;
     const timer = window.setInterval(() => {
@@ -405,16 +432,33 @@ export function App() {
         void runSyncCycle(false, undefined, true);
       }
     };
+    let deleteSyncTimer: number | null = null;
+    const onThreadDeleted = () => {
+      if (!cloudUser.vipActive || syncReadyForUserRef.current !== cloudUser.id) return;
+      if (deleteSyncTimer) window.clearTimeout(deleteSyncTimer);
+      deleteSyncTimer = window.setTimeout(() => {
+        void runSyncCycle(false, undefined, true);
+      }, 300);
+    };
+    const onProfileLocalChanged = () => {
+      setProfileChangeTick((n) => n + 1);
+    };
     window.addEventListener('focus', onForeground);
     document.addEventListener('visibilitychange', onForeground);
+    window.addEventListener(AI_THREAD_DELETED_EVENT, onThreadDeleted);
+    window.addEventListener(PROFILE_LOCAL_CHANGED_EVENT, onProfileLocalChanged);
     return () => {
       window.clearInterval(timer);
+      if (deleteSyncTimer) window.clearTimeout(deleteSyncTimer);
       window.removeEventListener('focus', onForeground);
       document.removeEventListener('visibilitychange', onForeground);
+      window.removeEventListener(AI_THREAD_DELETED_EVENT, onThreadDeleted);
+      window.removeEventListener(PROFILE_LOCAL_CHANGED_EVENT, onProfileLocalChanged);
     };
   }, [cloudUser]);
 
-  // Immediate silent push (~300ms debounce) when VIP user modifies hosts/settings/theme (AI threads stay on 30s heartbeat)
+  // Immediate silent push (~300ms debounce) when VIP user modifies hosts/saved commands/AI settings/theme
+  // (AI chat messages stay on 30s heartbeat; AI thread deletions push immediately via AI_THREAD_DELETED_EVENT)
   // Guarded by syncReadyForUserRef so a fresh login NEVER pushes an empty local profile before initial pull completes!
   useEffect(() => {
     if (
@@ -444,7 +488,7 @@ export function App() {
     return () => {
       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current);
     };
-  }, [hosts, aiSettings, themeId]);
+  }, [hosts, aiSettings, themeId, profileChangeTick]);
 
   const handleUpdateAiSettings = (next: AiSettingsState) => {
     setAiSettings(next);
@@ -906,6 +950,8 @@ export function App() {
             setCloudUser(nextUser);
             if (!nextUser) {
               setSyncStatus('idle');
+              syncReadyForUserRef.current = null;
+              clearThreadSyncTracking();
               setSyncMeta({ userId: '', profileVersion: 0, threadsMaxVersion: 0, lastSyncedAt: 0 });
             }
           }}
@@ -1386,6 +1432,8 @@ export function App() {
           setCloudUser(nextUser);
           if (!nextUser) {
             setSyncStatus('idle');
+            syncReadyForUserRef.current = null;
+            clearThreadSyncTracking();
             setSyncMeta({ userId: '', profileVersion: 0, threadsMaxVersion: 0, lastSyncedAt: 0 });
           }
         }}

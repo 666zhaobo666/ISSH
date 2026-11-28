@@ -1,5 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Play, Plus, Search, Terminal, Trash2 } from 'lucide-react';
+import {
+  PROFILE_LOCAL_CHANGED_EVENT,
+  SAVED_COMMANDS_UPDATED_EVENT,
+} from '../cloud/syncEngine';
 
 export interface SavedCommand {
   id: string;
@@ -62,9 +66,24 @@ export function SavedCommandsPane({
   const [category, setCategory] = useState('常用');
   const [adding, setAdding] = useState(false);
 
+  useEffect(() => {
+    const reload = () => setCommands(loadCommands());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === COMMANDS_STORAGE_KEY) reload();
+    };
+    window.addEventListener(SAVED_COMMANDS_UPDATED_EVENT, reload);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(SAVED_COMMANDS_UPDATED_EVENT, reload);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
   const persist = (next: SavedCommand[]) => {
     setCommands(next);
     localStorage.setItem(COMMANDS_STORAGE_KEY, JSON.stringify(next));
+    // Notify unified cloud sync engine for immediate push (300ms debounce)
+    window.dispatchEvent(new CustomEvent(PROFILE_LOCAL_CHANGED_EVENT));
   };
 
   const handleAdd = (e: React.FormEvent) => {

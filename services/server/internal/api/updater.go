@@ -57,7 +57,18 @@ func readCurrentServerVersion() string {
 			}
 		}
 	}
-	return "v0.1.11"
+	// Dev mode fallback: read version directly from apps/desktop/package.json
+	for _, p := range []string{"../../apps/desktop/package.json", "apps/desktop/package.json"} {
+		if raw, err := os.ReadFile(p); err == nil {
+			var pkg struct {
+				Version string `json:"version"`
+			}
+			if json.Unmarshal(raw, &pkg) == nil && strings.TrimSpace(pkg.Version) != "" {
+				return "v" + strings.TrimSpace(pkg.Version)
+			}
+		}
+	}
+	return "dev"
 }
 
 func (s *Server) handleAdminSystemUpdateStatus(w http.ResponseWriter, r *http.Request) {

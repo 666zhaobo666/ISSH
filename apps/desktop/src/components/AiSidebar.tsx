@@ -49,6 +49,10 @@ import {
   type AiSettingsState,
 } from '../ai/settingsStore';
 import type { SettingsTab } from './SettingsModal';
+import {
+  AI_THREADS_UPDATED_EVENT,
+  recordDeletedThreadTombstone,
+} from '../cloud/syncEngine';
 
 const AI_THREADS_KEY = 'issh.ai_threads.v1';
 const AI_WIDTH_KEY = 'issh.ai_sidebar_width.v1';
@@ -373,11 +377,18 @@ export function AiSidebar({
     );
   }, [followActive, selectedSessionIds]);
 
-  // Sync threads & host selection across main & standalone AI windows
+  // Sync threads & host selection across main, standalone AI windows, and cloud sync
   useEffect(() => {
+    const reloadThreadsFromStorage = () => {
+      const next = loadThreads();
+      setThreads(next);
+      setActiveThreadId((cur) =>
+        next.some((t) => t.id === cur) ? cur : (next[0]?.id ?? '')
+      );
+    };
     const onStorage = (e: StorageEvent) => {
       if (e.key === AI_THREADS_KEY) {
-        setThreads(loadThreads());
+        reloadThreadsFromStorage();
       } else if (e.key === AI_HOST_SEL_KEY && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue) as {
@@ -396,7 +407,11 @@ export function AiSidebar({
       }
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener(AI_THREADS_UPDATED_EVENT, reloadThreadsFromStorage);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(AI_THREADS_UPDATED_EVENT, reloadThreadsFromStorage);
+    };
   }, []);
 
   useEffect(() => {
@@ -536,6 +551,7 @@ export function AiSidebar({
 
   const handleDeleteThread = (id: string) => {
     if (running && id === activeThread.id) return;
+    recordDeletedThreadTombstone(id);
     setThreads((prev) => {
       const remaining = prev.filter((t) => t.id !== id);
       const next = remaining.length > 0 ? remaining : [createEmptyThread()];
