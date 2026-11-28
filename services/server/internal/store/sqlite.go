@@ -235,6 +235,15 @@ func (s *SQLiteStore) UpdateUserPassword(id, passwordHash string) error {
 
 func (s *SQLiteStore) UpdateUserStatus(id, status string) error {
 	now := time.Now().UnixMilli()
+	// 封禁（disabled）时同时清除 VIP 权限，避免被封禁用户仍保留 VIP 权益。
+	// token_version + 1 会使用户已签发的 token 全部失效，实现「踢下线」。
+	if status == "disabled" {
+		_, err := s.db.Exec(
+			`UPDATE users SET status = ?, token_version = token_version + 1, vip_expire_at = 0, updated_at = ? WHERE id = ?`,
+			status, now, id,
+		)
+		return err
+	}
 	_, err := s.db.Exec(
 		`UPDATE users SET status = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?`,
 		status, now, id,

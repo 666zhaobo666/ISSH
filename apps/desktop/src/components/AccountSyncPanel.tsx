@@ -326,15 +326,15 @@ export function AccountSyncPanel({
           )}
           <div>
             <div className="font-medium text-slate-200">
-              {user.vipActive ? '同步功能已开启' : '云端同步已暂停（仅 VIP 可用）'}
+              {user.vipActive ? '同步功能已开启' : '云端同步已关闭，VIP可用'}
             </div>
-            <div className="text-[11px] text-slate-400">
-              {user.vipActive
-                ? lastSyncedAt > 0
+            {user.vipActive && (
+              <div className="text-[11px] text-slate-400">
+                {lastSyncedAt > 0
                   ? `上次同步：${new Date(lastSyncedAt).toLocaleTimeString()}`
-                  : '配置变更即时同步，后台自动静默保活'
-                : '云端数据已安全保留不删除，激活 VIP 后可选择云端/本地/智能合并恢复'}
-            </div>
+                  : '配置变更即时同步，后台自动静默保活'}
+              </div>
+            )}
           </div>
         </div>
         {user.vipActive && (

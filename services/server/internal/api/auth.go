@@ -269,7 +269,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u.Status != "active" {
-		writeError(w, http.StatusForbidden, "USER_DISABLED", "该账号已被管理员禁用")
+		writeError(w, http.StatusForbidden, "USER_DISABLED", "账号已被封禁")
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {

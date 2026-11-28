@@ -57,11 +57,13 @@ import {
   type IsshUserProfileBundle,
 } from './ai/profileBundle';
 import {
+  CloudApiError,
   fetchMe,
   fetchSyncHeartbeat,
   getCachedCloudUser,
   getCloudToken,
   getSyncMeta,
+  logoutCloudAccount,
   pullCloudProfile,
   pullCloudThreads,
   pushCloudProfile,
@@ -328,8 +330,18 @@ export function App() {
       setLastSyncedAt(now);
       syncReadyForUserRef.current = activeUser.id;
       if (!silent) setSyncStatus('synced');
-    } catch {
-      if (!silent) setSyncStatus('error');
+    } catch (err) {
+      if (err instanceof CloudApiError && err.status === 401) {
+        // 账号被封禁/禁用或登录已失效：强制下线并清空会话，前端回到登录态
+        logoutCloudAccount();
+        setCloudUser(null);
+        setSyncStatus('idle');
+        syncReadyForUserRef.current = null;
+        clearThreadSyncTracking();
+        setSyncMeta({ userId: '', profileVersion: 0, threadsMaxVersion: 0, lastSyncedAt: 0 });
+      } else if (!silent) {
+        setSyncStatus('error');
+      }
     } finally {
       syncInFlightRef.current = false;
       if (pendingResyncRef.current) {
