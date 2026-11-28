@@ -6,6 +6,7 @@ import {
   Cloud,
   CloudOff,
   Crown,
+  Download,
   FolderTree,
   Moon,
   Palette,
@@ -44,6 +45,7 @@ import { MobileShell, type MobileNavTab } from './mobile/MobileShell';
 import type { AiContextSyncPayload } from './components/AiStandaloneWindow';
 import { SettingsModal, type SettingsTab } from './components/SettingsModal';
 import { AccountAuthModal } from './components/AccountAuthModal';
+import { DownloadPage } from './components/DownloadPage';
 import {
   SyncConflictModal,
   type ConflictStrategy,
@@ -138,6 +140,7 @@ export function App() {
   const [mobileTab, setMobileTab] = useState<MobileNavTab>('hosts');
   const [showMetrics, setShowMetrics] = useState(true);
   const [showAi, setShowAi] = useState(false);
+  const [showDownload, setShowDownload] = useState(false);
   const [aiSettings, setAiSettings] = useState<AiSettingsState>(loadAiSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('providers');
@@ -877,6 +880,18 @@ export function App() {
             }
           }}
         />
+        <button
+          type="button"
+          onClick={() => setShowDownload(true)}
+          className="fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/15 bg-[#101622]/95 px-4 py-2 text-xs text-slate-300 shadow-lg transition hover:border-sky-500/40 hover:text-sky-300"
+          title="下载 Windows / 安卓客户端"
+        >
+          <Download className="h-3.5 w-3.5" />
+          下载 Windows / 安卓客户端
+        </button>
+        {showDownload ? (
+          <DownloadPage onClose={() => setShowDownload(false)} />
+        ) : null}
       </div>
     );
   }
@@ -1165,6 +1180,17 @@ export function App() {
               <Moon className="h-3.5 w-3.5 text-indigo-400" />
             )}
           </button>
+          {!isTauriRuntime() ? (
+            <button
+              type="button"
+              onClick={() => setShowDownload(true)}
+              className="flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300"
+              title="下载 Windows / 安卓客户端"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>下载</span>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => openSettings(updateInfo?.hasUpdate ? 'about' : 'providers')}
@@ -1486,6 +1512,10 @@ export function App() {
           if (connectNow) void handleConnect(h);
         }}
       />
+
+      {showDownload ? (
+        <DownloadPage onClose={() => setShowDownload(false)} />
+      ) : null}
     </div>
   );
 }
