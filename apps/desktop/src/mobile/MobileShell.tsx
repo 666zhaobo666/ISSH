@@ -3,6 +3,7 @@ import {
   Activity,
   Bot,
   Crown,
+  Download,
   FolderTree,
   Moon,
   Plus,
@@ -81,6 +82,8 @@ interface MobileShellProps {
   onOpenAuth: () => void;
   cloudUser: CloudUser | null;
   updateInfo: UpdateCheckResult | null;
+  /** 仅在 web 端传入：打开下载页（Android 原生 App 不传，不显示下载入口） */
+  onOpenDownload?: () => void;
 }
 
 const NAV_ITEMS: Array<{
@@ -125,10 +128,24 @@ export function MobileShell({
   onOpenAuth,
   cloudUser,
   updateInfo,
+  onOpenDownload,
 }: MobileShellProps) {
   const [commandsOpen, setCommandsOpen] = useState(false);
   const currentSessionTab =
     tabs.find((t) => t.tabId === activeSessionTabId) ?? null;
+
+  const renderDownloadButton = () =>
+    onOpenDownload ? (
+      <button
+        type="button"
+        onClick={onOpenDownload}
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 active:scale-95"
+        aria-label="下载客户端"
+        title="下载 Windows / 安卓客户端"
+      >
+        <Download className="h-4 w-4" />
+      </button>
+    ) : null;
 
   const renderAvatarButton = () =>
     cloudUser ? (
@@ -198,6 +215,7 @@ export function MobileShell({
             </div>
 
             <div className="flex flex-col items-center gap-2.5 pb-1">
+              {renderDownloadButton()}
               <button
                 type="button"
                 onClick={onToggleUiMode}
@@ -294,6 +312,7 @@ export function MobileShell({
 
             {!isTablet && (
               <div className="flex shrink-0 items-center gap-1.5">
+                {renderDownloadButton()}
                 <button
                   type="button"
                   onClick={onToggleUiMode}

@@ -946,6 +946,9 @@ export function App() {
           onOpenAuth={() => setAuthModalOpen(true)}
           cloudUser={cloudUser}
           updateInfo={updateInfo}
+          onOpenDownload={
+            !isTauriRuntime() ? () => setShowDownload(true) : undefined
+          }
         />
 
         <SettingsModal
@@ -1020,6 +1023,10 @@ export function App() {
             if (connectNow) void handleConnect(h);
           }}
         />
+
+        {showDownload ? (
+          <DownloadPage onClose={() => setShowDownload(false)} />
+        ) : null}
       </>
     );
   }

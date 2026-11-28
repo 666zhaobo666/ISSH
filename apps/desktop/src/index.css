@@ -137,3 +137,44 @@ html.light .bg-sky-500 *,
 html.light .bg-rose-500 * {
   color: #ffffff !important;
 }
+
+/* Light mode: markdown 后代选择器（.ai-markdown [&_...]）硬编码了深色文字色，
+   而上面的 .text-xxx 覆盖只匹配「类名」，匹配不到 markdown 内部元素，
+   导致浅色下标题/加粗仍显示白色看不清。这里单独覆盖。 */
+html.light .ai-markdown h1,
+html.light .ai-markdown h2,
+html.light .ai-markdown h3,
+html.light .ai-markdown h4,
+html.light .ai-markdown strong {
+  color: #0f172a !important;
+}
+
+html.light .ai-markdown a {
+  color: #0284c7 !important;
+}
+
+html.light .ai-markdown code {
+  color: #0369a1 !important;
+  background-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html.light .ai-markdown blockquote {
+  color: #475569 !important;
+  border-color: #94a3b8 !important;
+}
+
+html.light .ai-markdown th {
+  color: #334155 !important;
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+html.light .ai-markdown h2,
+html.light .ai-markdown hr {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .ai-markdown table,
+html.light .ai-markdown td,
+html.light .ai-markdown th {
+  border-color: #cbd5e1 !important;
+}
