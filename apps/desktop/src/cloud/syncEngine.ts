@@ -213,7 +213,9 @@ export function applyCloudThreadRecords(
 
     const data = rec.data as LocalAiThread | undefined;
     if (!data || !data.id) continue;
-    const cloudTs = Math.max(rec.updatedAt ?? 0, data.updatedAt ?? 0);
+    // 服务端权威时间戳：服务端在写入时已统一用服务器时间打 updated_at，
+    // 这里直接用 rec.updatedAt 做冲突比较，不再混入 data.updatedAt（客户端时钟）防漂移。
+    const cloudTs = rec.updatedAt ?? data.updatedAt ?? 0;
     const localDel = tombstones[data.id] ?? 0;
     if (localDel >= cloudTs) {
       // Locally deleted more recently; ignore stale cloud copy

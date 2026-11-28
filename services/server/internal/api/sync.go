@@ -191,10 +191,9 @@ func (s *Server) handlePostSyncThreads(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		ts := t.UpdatedAt
-		if ts == 0 {
-			ts = time.Now().UnixMilli()
-		}
+		// 服务端权威时间戳：忽略客户端时钟（各设备时钟可能漂移），
+		// 统一用服务器时间做冲突判定基准，客户端拉回后据此比较，不再信任各设备 Date.now()。
+		ts := time.Now().UnixMilli()
 		items = append(items, &store.SyncThread{
 			UserID:           u.ID,
 			ThreadID:         t.ThreadID,
