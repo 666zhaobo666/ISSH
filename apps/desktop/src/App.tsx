@@ -70,6 +70,7 @@ import {
 } from './cloud/cloudClient';
 import {
   AI_THREAD_DELETED_EVENT,
+  AI_THREADS_LOCAL_CHANGED_EVENT,
   PROFILE_LOCAL_CHANGED_EVENT,
   SAVED_COMMANDS_UPDATED_EVENT,
   applyCloudThreadRecords,
@@ -432,11 +433,14 @@ export function App() {
         void runSyncCycle(false, undefined, true);
       }
     };
-    let deleteSyncTimer: number | null = null;
-    const onThreadDeleted = () => {
-      if (!cloudUser.vipActive || syncReadyForUserRef.current !== cloudUser.id) return;
-      if (deleteSyncTimer) window.clearTimeout(deleteSyncTimer);
-      deleteSyncTimer = window.setTimeout(() => {
+    let threadSyncTimer: number | null = null;
+    const onThreadChanged = () => {
+      // AI 对话变更（新增/编辑消息、删除对话）立即推送云端（300ms 去抖）。
+      // 注意：这里刻意不做 syncReadyForUserRef 守卫 —— 脏线程/tombstone 推送是"增量追加"，
+      // 不像 profile 那样会用本地空数据覆盖云端，所以即使首次拉取尚未完成也安全。
+      if (!cloudUser?.vipActive) return;
+      if (threadSyncTimer) window.clearTimeout(threadSyncTimer);
+      threadSyncTimer = window.setTimeout(() => {
         void runSyncCycle(false, undefined, true);
       }, 300);
     };
@@ -445,14 +449,16 @@ export function App() {
     };
     window.addEventListener('focus', onForeground);
     document.addEventListener('visibilitychange', onForeground);
-    window.addEventListener(AI_THREAD_DELETED_EVENT, onThreadDeleted);
+    window.addEventListener(AI_THREAD_DELETED_EVENT, onThreadChanged);
+    window.addEventListener(AI_THREADS_LOCAL_CHANGED_EVENT, onThreadChanged);
     window.addEventListener(PROFILE_LOCAL_CHANGED_EVENT, onProfileLocalChanged);
     return () => {
       window.clearInterval(timer);
-      if (deleteSyncTimer) window.clearTimeout(deleteSyncTimer);
+      if (threadSyncTimer) window.clearTimeout(threadSyncTimer);
       window.removeEventListener('focus', onForeground);
       document.removeEventListener('visibilitychange', onForeground);
-      window.removeEventListener(AI_THREAD_DELETED_EVENT, onThreadDeleted);
+      window.removeEventListener(AI_THREAD_DELETED_EVENT, onThreadChanged);
+      window.removeEventListener(AI_THREADS_LOCAL_CHANGED_EVENT, onThreadChanged);
       window.removeEventListener(PROFILE_LOCAL_CHANGED_EVENT, onProfileLocalChanged);
     };
   }, [cloudUser]);

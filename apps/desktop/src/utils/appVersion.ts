@@ -1,7 +1,10 @@
 import { getCloudServerUrl } from '../cloud/cloudClient';
 import { isTauriRuntime } from '../transport/runtime';
 
-export const APP_VERSION = '0.1.15';
+// 版本号唯一来源是 src-tauri/tauri.conf.json 的 version 字段，构建时由 Vite 注入（见 vite.config.ts）。
+// 请勿在此硬编码版本号，发版只需改 tauri.conf.json 并执行 `npm run version:sync`。
+declare const __APP_VERSION__: string;
+export const APP_VERSION: string = __APP_VERSION__;
 export const GITHUB_REPO_URL = 'https://github.com/666zhaobo666/ISSH';
 
 export interface ReleaseAsset {

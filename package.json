@@ -1,6 +1,6 @@
 {
   "name": "issh",
-  "version": "0.1.0",
+  "version": "0.1.16",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -12,6 +12,7 @@
     "build:core": "npm run build --workspace=@issh/core",
     "build:desktop": "npm run build --workspace=@issh/desktop",
     "build:admin": "npm run build --workspace=@issh/admin",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "version:sync": "node scripts/sync-version.mjs"
   }
 }

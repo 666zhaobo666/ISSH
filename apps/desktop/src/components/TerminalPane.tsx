@@ -164,10 +164,10 @@ export function TerminalPane({
 
     // Termius-style mobile/tablet touch gestures:
     // - 1-finger horizontal swipe: Left/Right arrow cursor control
-    // - 1-finger vertical swipe: Up/Down arrow history command switching
-    // - 2-finger vertical swipe: Scroll terminal buffer
+    // - 1-finger vertical swipe: Scroll terminal buffer (up/down)
+    // - 2-finger vertical swipe: Up/Down arrow command history switching
     // - Double-tap: Tab autocomplete & focus
-    let touchMode: 'none' | 'single' | 'scroll' = 'none';
+    let touchMode: 'none' | 'single' | 'history' = 'none';
     let lastX = 0;
     let lastY = 0;
     let accumX = 0;
@@ -186,7 +186,7 @@ export function TerminalPane({
         accumY = 0;
         totalMoved = 0;
       } else if (e.touches.length === 2) {
-        touchMode = 'scroll';
+        touchMode = 'history';
         lastY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         accumY = 0;
       } else {
@@ -196,16 +196,21 @@ export function TerminalPane({
 
     const onTouchMove = (e: TouchEvent) => {
       const sid = sessionIdRef.current;
-      if (touchMode === 'scroll' && e.touches.length === 2) {
+      if (touchMode === 'history' && e.touches.length === 2) {
+        // 2-finger vertical swipe: Up/Down arrow command history switching
         e.preventDefault();
         const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         accumY += midY - lastY;
         lastY = midY;
-        const step = 16;
+        const step = 40;
         if (Math.abs(accumY) >= step) {
-          const lines = Math.trunc(accumY / step);
-          term.scrollLines(-lines);
-          accumY -= lines * step;
+          const steps = Math.trunc(accumY / step);
+          if (sid) {
+            // swipe down (positive) -> DOWN arrow (newer); swipe up -> UP arrow (older)
+            const seq = steps > 0 ? '\x1b[B' : '\x1b[A';
+            void transport.writePty(sid, seq.repeat(Math.abs(steps)));
+          }
+          accumY -= steps * step;
         }
         return;
       }
@@ -221,10 +226,22 @@ export function TerminalPane({
         accumX += dx;
         accumY += dy;
 
+        // 1-finger vertical swipe: scroll terminal buffer (up/down)
+        const vStep = 20;
+        if (Math.abs(accumY) >= vStep && Math.abs(accumY) > Math.abs(accumX) * 1.2) {
+          e.preventDefault();
+          const lines = Math.trunc(accumY / vStep);
+          // swipe up (negative accumY) -> scroll up to older content; swipe down -> newer
+          term.scrollLines(-lines);
+          accumY -= lines * vStep;
+          accumX = 0;
+          return;
+        }
+
         if (!sid) return;
         const hStep = 28;
 
-        // Only horizontal 1-finger swipe controls cursor left/right (vertical swipe disabled)
+        // 1-finger horizontal swipe: Left/Right arrow cursor control
         if (Math.abs(accumX) >= hStep && Math.abs(accumX) > Math.abs(accumY) * 1.2) {
           e.preventDefault();
           const steps = Math.trunc(accumX / hStep);

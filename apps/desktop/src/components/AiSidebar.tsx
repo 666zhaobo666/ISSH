@@ -51,6 +51,7 @@ import {
 import type { SettingsTab } from './SettingsModal';
 import {
   AI_THREADS_UPDATED_EVENT,
+  AI_THREADS_LOCAL_CHANGED_EVENT,
   recordDeletedThreadTombstone,
 } from '../cloud/syncEngine';
 
@@ -368,6 +369,9 @@ export function AiSidebar({
 
   useEffect(() => {
     localStorage.setItem(AI_THREADS_KEY, JSON.stringify(threads.slice(0, 40)));
+    // 本地对话变更（新增/编辑消息/新建对话）立即通知 App.tsx 推送云端，
+    // 不再只等 30s 心跳，解决"新增的对话和内容没有及时同步"的问题。
+    window.dispatchEvent(new CustomEvent(AI_THREADS_LOCAL_CHANGED_EVENT));
   }, [threads]);
 
   useEffect(() => {

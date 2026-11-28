@@ -20,6 +20,10 @@ const AI_DELETED_TOMBSTONES_KEY = 'issh.ai_deleted_threads.v1';
 const AI_PUSHED_FP_KEY = 'issh.ai_threads_pushed_fp.v1';
 export const AI_THREADS_UPDATED_EVENT = 'issh-ai-threads-updated';
 export const AI_THREAD_DELETED_EVENT = 'issh-ai-thread-deleted';
+// Fired when the user mutates AI threads locally (new thread / new or edited message).
+// Consumed ONLY by App.tsx to trigger an immediate cloud push; AiSidebar must NOT listen
+// to this event, otherwise its reload-from-storage handler would loop on every keystroke.
+export const AI_THREADS_LOCAL_CHANGED_EVENT = 'issh-ai-threads-local-changed';
 export const SAVED_COMMANDS_UPDATED_EVENT = 'issh-saved-commands-updated';
 export const PROFILE_LOCAL_CHANGED_EVENT = 'issh-profile-local-changed';
 
