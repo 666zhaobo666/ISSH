@@ -178,7 +178,11 @@ func (s *Server) handlePostSyncThreads(w http.ResponseWriter, r *http.Request) {
 		if t.ThreadID == "" {
 			continue
 		}
-		var enc []byte
+		// tombstone（删除记录）不携带数据，EncryptedPayload 用非空占位而非 nil：
+		// 否则 Linux 上 modernc.org/sqlite 会把 nil []byte 绑定成 SQL NULL，
+		// 违反 encrypted_payload 的 NOT NULL 约束，导致整批事务失败、tombstone 卡死，
+		// 并连带后续新增对话也无法同步。
+		enc := []byte("{}")
 		if !t.Deleted && len(t.Data) > 0 {
 			var err error
 			enc, err = s.Cipher.Encrypt(t.Data)
